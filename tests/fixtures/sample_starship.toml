@@ -1,0 +1,18 @@
+# Sample KeyJey configuration for tests
+# Other starship sections are intentionally present to verify they are silently ignored
+
+[directory]
+style = "bold blue"
+truncation_length = 5
+
+[git_branch]
+style = "bold purple"
+
+[keyjey]
+lines = ["$keyjey.model $git_branch", "$keyjey.cost"]
+
+[keyjey.model]
+style = "bold green"
+symbol = ""
+disabled = false
+label = false

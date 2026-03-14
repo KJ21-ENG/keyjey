@@ -1,0 +1,6 @@
+[keyjey]
+lines = ["$keyjey.context_window.used_percentage"]
+
+[keyjey.context_window]
+format = "[ ctx: $value% ]($style)"
+style = "bold green"

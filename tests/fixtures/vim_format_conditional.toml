@@ -1,0 +1,5 @@
+[keyjey]
+lines = ["$keyjey.vim"]
+
+[keyjey.vim]
+format = "($value)"

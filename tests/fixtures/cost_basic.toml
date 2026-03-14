@@ -1,0 +1,4 @@
+[keyjey]
+lines = ["$keyjey.cost"]
+
+[keyjey.cost]

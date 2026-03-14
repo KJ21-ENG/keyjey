@@ -1,0 +1,4 @@
+[keyjey]
+lines = ["$keyjey.context_bar"]
+
+[keyjey.context_bar]

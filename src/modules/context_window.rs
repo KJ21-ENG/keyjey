@@ -1,0 +1,1245 @@
+use crate::config::KeyjeyConfig;
+use crate::context::Context;
+
+const DEFAULT_EXCEEDS_SYMBOL: &str = ">200k";
+
+fn is_disabled(cfg: &KeyjeyConfig) -> bool {
+    cfg.context_window
+        .as_ref()
+        .and_then(|c| c.disabled)
+        .unwrap_or(false)
+}
+
+fn apply_cw_style(content: &str, cfg: &KeyjeyConfig) -> String {
+    crate::ansi::apply_style(
+        content,
+        cfg.context_window.as_ref().and_then(|c| c.style.as_deref()),
+    )
+}
+
+/// Renders `$keyjey.context_window.used_percentage` — integer percentage, no `%` sign.
+pub fn render_used_percentage(ctx: &Context, cfg: &KeyjeyConfig) -> Option<String> {
+    if is_disabled(cfg) {
+        return None;
+    }
+    let cw_cfg = cfg.context_window.as_ref();
+    let sub_cfg = cw_cfg.and_then(|c| c.used_percentage.as_ref());
+    if sub_cfg.and_then(|c| c.disabled).unwrap_or(false) {
+        return None;
+    }
+    let val = match ctx
+        .context_window
+        .as_ref()
+        .and_then(|cw| cw.used_percentage)
+    {
+        Some(v) => v,
+        None => {
+            tracing::warn!("keyjey.context_window.used_percentage: value absent from context");
+            return None;
+        }
+    };
+    let val_str = format!("{:.0}", val);
+    let style = sub_cfg
+        .and_then(|c| c.style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.style.as_deref()));
+    let warn_threshold = sub_cfg
+        .and_then(|c| c.warn_threshold)
+        .or_else(|| cw_cfg.and_then(|c| c.warn_threshold));
+    let warn_style = sub_cfg
+        .and_then(|c| c.warn_style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.warn_style.as_deref()));
+    let critical_threshold = sub_cfg
+        .and_then(|c| c.critical_threshold)
+        .or_else(|| cw_cfg.and_then(|c| c.critical_threshold));
+    let critical_style = sub_cfg
+        .and_then(|c| c.critical_style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.critical_style.as_deref()));
+    if let Some(fmt) = sub_cfg
+        .and_then(|c| c.format.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.format.as_deref()))
+    {
+        let symbol = sub_cfg
+            .and_then(|c| c.symbol.as_deref())
+            .or_else(|| cw_cfg.and_then(|c| c.symbol.as_deref()));
+        let effective_style = crate::ansi::resolve_threshold_style(
+            Some(val),
+            style,
+            warn_threshold,
+            warn_style,
+            critical_threshold,
+            critical_style,
+        );
+        return crate::format::apply_module_format(fmt, Some(&val_str), symbol, effective_style);
+    }
+    Some(crate::ansi::apply_style_with_threshold(
+        &val_str,
+        Some(val),
+        style,
+        warn_threshold,
+        warn_style,
+        critical_threshold,
+        critical_style,
+    ))
+}
+
+/// Renders `$keyjey.context_window.remaining_percentage` — integer percentage, no `%` sign.
+pub fn render_remaining_percentage(ctx: &Context, cfg: &KeyjeyConfig) -> Option<String> {
+    if is_disabled(cfg) {
+        return None;
+    }
+    let cw_cfg = cfg.context_window.as_ref();
+    let sub_cfg = cw_cfg.and_then(|c| c.remaining_percentage.as_ref());
+    if sub_cfg.and_then(|c| c.disabled).unwrap_or(false) {
+        return None;
+    }
+    let val = match ctx
+        .context_window
+        .as_ref()
+        .and_then(|cw| cw.remaining_percentage)
+    {
+        Some(v) => v,
+        None => {
+            tracing::warn!("keyjey.context_window.remaining_percentage: value absent from context");
+            return None;
+        }
+    };
+    let val_str = format!("{:.0}", val);
+    let style = sub_cfg
+        .and_then(|c| c.style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.style.as_deref()));
+    let invert = sub_cfg.and_then(|c| c.invert_threshold).unwrap_or(false);
+    // When inverted, don't inherit parent thresholds — they live in the non-inverted domain.
+    // Negate both value and thresholds so `val >= thresh` becomes `val <= original_thresh`.
+    let (effective_val, warn_threshold, warn_style, critical_threshold, critical_style) = if invert
+    {
+        let w_thresh = sub_cfg.and_then(|c| c.warn_threshold).map(|t| -t);
+        let c_thresh = sub_cfg.and_then(|c| c.critical_threshold).map(|t| -t);
+        let w_style = sub_cfg.and_then(|c| c.warn_style.as_deref());
+        let c_style = sub_cfg.and_then(|c| c.critical_style.as_deref());
+        (Some(-val), w_thresh, w_style, c_thresh, c_style)
+    } else {
+        let w_thresh = sub_cfg
+            .and_then(|c| c.warn_threshold)
+            .or_else(|| cw_cfg.and_then(|c| c.warn_threshold));
+        let c_thresh = sub_cfg
+            .and_then(|c| c.critical_threshold)
+            .or_else(|| cw_cfg.and_then(|c| c.critical_threshold));
+        let w_style = sub_cfg
+            .and_then(|c| c.warn_style.as_deref())
+            .or_else(|| cw_cfg.and_then(|c| c.warn_style.as_deref()));
+        let c_style = sub_cfg
+            .and_then(|c| c.critical_style.as_deref())
+            .or_else(|| cw_cfg.and_then(|c| c.critical_style.as_deref()));
+        (Some(val), w_thresh, w_style, c_thresh, c_style)
+    };
+    if let Some(fmt) = sub_cfg
+        .and_then(|c| c.format.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.format.as_deref()))
+    {
+        let symbol = sub_cfg
+            .and_then(|c| c.symbol.as_deref())
+            .or_else(|| cw_cfg.and_then(|c| c.symbol.as_deref()));
+        let effective_style = crate::ansi::resolve_threshold_style(
+            effective_val,
+            style,
+            warn_threshold,
+            warn_style,
+            critical_threshold,
+            critical_style,
+        );
+        return crate::format::apply_module_format(fmt, Some(&val_str), symbol, effective_style);
+    }
+    Some(crate::ansi::apply_style_with_threshold(
+        &val_str,
+        effective_val,
+        style,
+        warn_threshold,
+        warn_style,
+        critical_threshold,
+        critical_style,
+    ))
+}
+
+/// Renders `$keyjey.context_window.size` — reads `context_window_size` field (not `size`).
+pub fn render_size(ctx: &Context, cfg: &KeyjeyConfig) -> Option<String> {
+    if is_disabled(cfg) {
+        return None;
+    }
+    let cw_cfg = cfg.context_window.as_ref();
+    let sub_cfg = cw_cfg.and_then(|c| c.size.as_ref());
+    if sub_cfg.and_then(|c| c.disabled).unwrap_or(false) {
+        return None;
+    }
+    let val = match ctx
+        .context_window
+        .as_ref()
+        .and_then(|cw| cw.context_window_size)
+    {
+        Some(v) => v,
+        None => {
+            tracing::warn!("keyjey.context_window.size: context_window_size absent from context");
+            return None;
+        }
+    };
+    let val_str = val.to_string();
+    let style = sub_cfg
+        .and_then(|c| c.style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.style.as_deref()));
+    let warn_threshold = sub_cfg
+        .and_then(|c| c.warn_threshold)
+        .or_else(|| cw_cfg.and_then(|c| c.warn_threshold));
+    let warn_style = sub_cfg
+        .and_then(|c| c.warn_style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.warn_style.as_deref()));
+    let critical_threshold = sub_cfg
+        .and_then(|c| c.critical_threshold)
+        .or_else(|| cw_cfg.and_then(|c| c.critical_threshold));
+    let critical_style = sub_cfg
+        .and_then(|c| c.critical_style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.critical_style.as_deref()));
+    if let Some(fmt) = sub_cfg
+        .and_then(|c| c.format.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.format.as_deref()))
+    {
+        let symbol = sub_cfg
+            .and_then(|c| c.symbol.as_deref())
+            .or_else(|| cw_cfg.and_then(|c| c.symbol.as_deref()));
+        let effective_style = crate::ansi::resolve_threshold_style(
+            Some(val as f64),
+            style,
+            warn_threshold,
+            warn_style,
+            critical_threshold,
+            critical_style,
+        );
+        return crate::format::apply_module_format(fmt, Some(&val_str), symbol, effective_style);
+    }
+    Some(crate::ansi::apply_style_with_threshold(
+        &val_str,
+        Some(val as f64),
+        style,
+        warn_threshold,
+        warn_style,
+        critical_threshold,
+        critical_style,
+    ))
+}
+
+/// Renders `$keyjey.context_window.total_input_tokens`.
+pub fn render_total_input_tokens(ctx: &Context, cfg: &KeyjeyConfig) -> Option<String> {
+    if is_disabled(cfg) {
+        return None;
+    }
+    let cw_cfg = cfg.context_window.as_ref();
+    let sub_cfg = cw_cfg.and_then(|c| c.total_input_tokens.as_ref());
+    if sub_cfg.and_then(|c| c.disabled).unwrap_or(false) {
+        return None;
+    }
+    let val = match ctx
+        .context_window
+        .as_ref()
+        .and_then(|cw| cw.total_input_tokens)
+    {
+        Some(v) => v,
+        None => {
+            tracing::warn!("keyjey.context_window.total_input_tokens: value absent from context");
+            return None;
+        }
+    };
+    let val_str = val.to_string();
+    let style = sub_cfg
+        .and_then(|c| c.style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.style.as_deref()));
+    let warn_threshold = sub_cfg
+        .and_then(|c| c.warn_threshold)
+        .or_else(|| cw_cfg.and_then(|c| c.warn_threshold));
+    let warn_style = sub_cfg
+        .and_then(|c| c.warn_style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.warn_style.as_deref()));
+    let critical_threshold = sub_cfg
+        .and_then(|c| c.critical_threshold)
+        .or_else(|| cw_cfg.and_then(|c| c.critical_threshold));
+    let critical_style = sub_cfg
+        .and_then(|c| c.critical_style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.critical_style.as_deref()));
+    if let Some(fmt) = sub_cfg
+        .and_then(|c| c.format.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.format.as_deref()))
+    {
+        let symbol = sub_cfg
+            .and_then(|c| c.symbol.as_deref())
+            .or_else(|| cw_cfg.and_then(|c| c.symbol.as_deref()));
+        let effective_style = crate::ansi::resolve_threshold_style(
+            Some(val as f64),
+            style,
+            warn_threshold,
+            warn_style,
+            critical_threshold,
+            critical_style,
+        );
+        return crate::format::apply_module_format(fmt, Some(&val_str), symbol, effective_style);
+    }
+    Some(crate::ansi::apply_style_with_threshold(
+        &val_str,
+        Some(val as f64),
+        style,
+        warn_threshold,
+        warn_style,
+        critical_threshold,
+        critical_style,
+    ))
+}
+
+/// Renders `$keyjey.context_window.total_output_tokens`.
+pub fn render_total_output_tokens(ctx: &Context, cfg: &KeyjeyConfig) -> Option<String> {
+    if is_disabled(cfg) {
+        return None;
+    }
+    let cw_cfg = cfg.context_window.as_ref();
+    let sub_cfg = cw_cfg.and_then(|c| c.total_output_tokens.as_ref());
+    if sub_cfg.and_then(|c| c.disabled).unwrap_or(false) {
+        return None;
+    }
+    let val = match ctx
+        .context_window
+        .as_ref()
+        .and_then(|cw| cw.total_output_tokens)
+    {
+        Some(v) => v,
+        None => {
+            tracing::warn!("keyjey.context_window.total_output_tokens: value absent from context");
+            return None;
+        }
+    };
+    let val_str = val.to_string();
+    let style = sub_cfg
+        .and_then(|c| c.style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.style.as_deref()));
+    let warn_threshold = sub_cfg
+        .and_then(|c| c.warn_threshold)
+        .or_else(|| cw_cfg.and_then(|c| c.warn_threshold));
+    let warn_style = sub_cfg
+        .and_then(|c| c.warn_style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.warn_style.as_deref()));
+    let critical_threshold = sub_cfg
+        .and_then(|c| c.critical_threshold)
+        .or_else(|| cw_cfg.and_then(|c| c.critical_threshold));
+    let critical_style = sub_cfg
+        .and_then(|c| c.critical_style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.critical_style.as_deref()));
+    if let Some(fmt) = sub_cfg
+        .and_then(|c| c.format.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.format.as_deref()))
+    {
+        let symbol = sub_cfg
+            .and_then(|c| c.symbol.as_deref())
+            .or_else(|| cw_cfg.and_then(|c| c.symbol.as_deref()));
+        let effective_style = crate::ansi::resolve_threshold_style(
+            Some(val as f64),
+            style,
+            warn_threshold,
+            warn_style,
+            critical_threshold,
+            critical_style,
+        );
+        return crate::format::apply_module_format(fmt, Some(&val_str), symbol, effective_style);
+    }
+    Some(crate::ansi::apply_style_with_threshold(
+        &val_str,
+        Some(val as f64),
+        style,
+        warn_threshold,
+        warn_style,
+        critical_threshold,
+        critical_style,
+    ))
+}
+
+/// Renders `$keyjey.context_window.exceeds_200k`.
+///
+/// CRITICAL: `exceeds_200k_tokens` is a TOP-LEVEL field on `Context`, NOT inside `context_window`.
+/// Returns None when false or absent (no tracing::warn! — false is a valid expected state).
+/// When true, renders configurable symbol (default: ">200k").
+pub fn render_exceeds_200k(ctx: &Context, cfg: &KeyjeyConfig) -> Option<String> {
+    if is_disabled(cfg) {
+        return None;
+    }
+    let exceeds = ctx.exceeds_200k_tokens.unwrap_or(false);
+    if !exceeds {
+        return None; // false is normal — no warn
+    }
+    let cw_cfg = cfg.context_window.as_ref();
+    let symbol_str = cw_cfg
+        .and_then(|c| c.symbol.as_deref())
+        .unwrap_or(DEFAULT_EXCEEDS_SYMBOL);
+    if let Some(fmt) = cw_cfg.and_then(|c| c.format.as_deref()) {
+        let style = cw_cfg.and_then(|c| c.style.as_deref());
+        return crate::format::apply_module_format(fmt, Some(symbol_str), Some(symbol_str), style);
+    }
+    Some(apply_cw_style(symbol_str, cfg))
+}
+
+/// Renders `$keyjey.context_window.current_usage.input_tokens`.
+pub fn render_current_usage_input_tokens(ctx: &Context, cfg: &KeyjeyConfig) -> Option<String> {
+    if is_disabled(cfg) {
+        return None;
+    }
+    let cw_cfg = cfg.context_window.as_ref();
+    let sub_cfg = cw_cfg.and_then(|c| c.current_usage_input_tokens.as_ref());
+    if sub_cfg.and_then(|c| c.disabled).unwrap_or(false) {
+        return None;
+    }
+    let val = match ctx
+        .context_window
+        .as_ref()
+        .and_then(|cw| cw.current_usage.as_ref())
+        .and_then(|cu| cu.input_tokens)
+    {
+        Some(v) => v,
+        None => {
+            tracing::warn!(
+                "keyjey.context_window.current_usage.input_tokens: value absent from context"
+            );
+            return None;
+        }
+    };
+    let val_str = val.to_string();
+    let style = sub_cfg
+        .and_then(|c| c.style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.style.as_deref()));
+    let warn_threshold = sub_cfg
+        .and_then(|c| c.warn_threshold)
+        .or_else(|| cw_cfg.and_then(|c| c.warn_threshold));
+    let warn_style = sub_cfg
+        .and_then(|c| c.warn_style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.warn_style.as_deref()));
+    let critical_threshold = sub_cfg
+        .and_then(|c| c.critical_threshold)
+        .or_else(|| cw_cfg.and_then(|c| c.critical_threshold));
+    let critical_style = sub_cfg
+        .and_then(|c| c.critical_style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.critical_style.as_deref()));
+    if let Some(fmt) = sub_cfg
+        .and_then(|c| c.format.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.format.as_deref()))
+    {
+        let symbol = sub_cfg
+            .and_then(|c| c.symbol.as_deref())
+            .or_else(|| cw_cfg.and_then(|c| c.symbol.as_deref()));
+        let effective_style = crate::ansi::resolve_threshold_style(
+            Some(val as f64),
+            style,
+            warn_threshold,
+            warn_style,
+            critical_threshold,
+            critical_style,
+        );
+        return crate::format::apply_module_format(fmt, Some(&val_str), symbol, effective_style);
+    }
+    Some(crate::ansi::apply_style_with_threshold(
+        &val_str,
+        Some(val as f64),
+        style,
+        warn_threshold,
+        warn_style,
+        critical_threshold,
+        critical_style,
+    ))
+}
+
+/// Renders `$keyjey.context_window.current_usage.output_tokens`.
+pub fn render_current_usage_output_tokens(ctx: &Context, cfg: &KeyjeyConfig) -> Option<String> {
+    if is_disabled(cfg) {
+        return None;
+    }
+    let cw_cfg = cfg.context_window.as_ref();
+    let sub_cfg = cw_cfg.and_then(|c| c.current_usage_output_tokens.as_ref());
+    if sub_cfg.and_then(|c| c.disabled).unwrap_or(false) {
+        return None;
+    }
+    let val = match ctx
+        .context_window
+        .as_ref()
+        .and_then(|cw| cw.current_usage.as_ref())
+        .and_then(|cu| cu.output_tokens)
+    {
+        Some(v) => v,
+        None => {
+            tracing::warn!(
+                "keyjey.context_window.current_usage.output_tokens: value absent from context"
+            );
+            return None;
+        }
+    };
+    let val_str = val.to_string();
+    let style = sub_cfg
+        .and_then(|c| c.style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.style.as_deref()));
+    let warn_threshold = sub_cfg
+        .and_then(|c| c.warn_threshold)
+        .or_else(|| cw_cfg.and_then(|c| c.warn_threshold));
+    let warn_style = sub_cfg
+        .and_then(|c| c.warn_style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.warn_style.as_deref()));
+    let critical_threshold = sub_cfg
+        .and_then(|c| c.critical_threshold)
+        .or_else(|| cw_cfg.and_then(|c| c.critical_threshold));
+    let critical_style = sub_cfg
+        .and_then(|c| c.critical_style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.critical_style.as_deref()));
+    if let Some(fmt) = sub_cfg
+        .and_then(|c| c.format.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.format.as_deref()))
+    {
+        let symbol = sub_cfg
+            .and_then(|c| c.symbol.as_deref())
+            .or_else(|| cw_cfg.and_then(|c| c.symbol.as_deref()));
+        let effective_style = crate::ansi::resolve_threshold_style(
+            Some(val as f64),
+            style,
+            warn_threshold,
+            warn_style,
+            critical_threshold,
+            critical_style,
+        );
+        return crate::format::apply_module_format(fmt, Some(&val_str), symbol, effective_style);
+    }
+    Some(crate::ansi::apply_style_with_threshold(
+        &val_str,
+        Some(val as f64),
+        style,
+        warn_threshold,
+        warn_style,
+        critical_threshold,
+        critical_style,
+    ))
+}
+
+/// Renders `$keyjey.context_window.current_usage.cache_creation_input_tokens`.
+pub fn render_current_usage_cache_creation_input_tokens(
+    ctx: &Context,
+    cfg: &KeyjeyConfig,
+) -> Option<String> {
+    if is_disabled(cfg) {
+        return None;
+    }
+    let cw_cfg = cfg.context_window.as_ref();
+    let sub_cfg = cw_cfg.and_then(|c| c.current_usage_cache_creation_input_tokens.as_ref());
+    if sub_cfg.and_then(|c| c.disabled).unwrap_or(false) {
+        return None;
+    }
+    let val = match ctx
+        .context_window
+        .as_ref()
+        .and_then(|cw| cw.current_usage.as_ref())
+        .and_then(|cu| cu.cache_creation_input_tokens)
+    {
+        Some(v) => v,
+        None => {
+            tracing::warn!(
+                "keyjey.context_window.current_usage.cache_creation_input_tokens: value absent from context"
+            );
+            return None;
+        }
+    };
+    let val_str = val.to_string();
+    let style = sub_cfg
+        .and_then(|c| c.style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.style.as_deref()));
+    let warn_threshold = sub_cfg
+        .and_then(|c| c.warn_threshold)
+        .or_else(|| cw_cfg.and_then(|c| c.warn_threshold));
+    let warn_style = sub_cfg
+        .and_then(|c| c.warn_style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.warn_style.as_deref()));
+    let critical_threshold = sub_cfg
+        .and_then(|c| c.critical_threshold)
+        .or_else(|| cw_cfg.and_then(|c| c.critical_threshold));
+    let critical_style = sub_cfg
+        .and_then(|c| c.critical_style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.critical_style.as_deref()));
+    if let Some(fmt) = sub_cfg
+        .and_then(|c| c.format.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.format.as_deref()))
+    {
+        let symbol = sub_cfg
+            .and_then(|c| c.symbol.as_deref())
+            .or_else(|| cw_cfg.and_then(|c| c.symbol.as_deref()));
+        let effective_style = crate::ansi::resolve_threshold_style(
+            Some(val as f64),
+            style,
+            warn_threshold,
+            warn_style,
+            critical_threshold,
+            critical_style,
+        );
+        return crate::format::apply_module_format(fmt, Some(&val_str), symbol, effective_style);
+    }
+    Some(crate::ansi::apply_style_with_threshold(
+        &val_str,
+        Some(val as f64),
+        style,
+        warn_threshold,
+        warn_style,
+        critical_threshold,
+        critical_style,
+    ))
+}
+
+/// Renders `$keyjey.context_window.current_usage.cache_read_input_tokens`.
+pub fn render_current_usage_cache_read_input_tokens(
+    ctx: &Context,
+    cfg: &KeyjeyConfig,
+) -> Option<String> {
+    if is_disabled(cfg) {
+        return None;
+    }
+    let cw_cfg = cfg.context_window.as_ref();
+    let sub_cfg = cw_cfg.and_then(|c| c.current_usage_cache_read_input_tokens.as_ref());
+    if sub_cfg.and_then(|c| c.disabled).unwrap_or(false) {
+        return None;
+    }
+    let val = match ctx
+        .context_window
+        .as_ref()
+        .and_then(|cw| cw.current_usage.as_ref())
+        .and_then(|cu| cu.cache_read_input_tokens)
+    {
+        Some(v) => v,
+        None => {
+            tracing::warn!(
+                "keyjey.context_window.current_usage.cache_read_input_tokens: value absent from context"
+            );
+            return None;
+        }
+    };
+    let val_str = val.to_string();
+    let style = sub_cfg
+        .and_then(|c| c.style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.style.as_deref()));
+    let warn_threshold = sub_cfg
+        .and_then(|c| c.warn_threshold)
+        .or_else(|| cw_cfg.and_then(|c| c.warn_threshold));
+    let warn_style = sub_cfg
+        .and_then(|c| c.warn_style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.warn_style.as_deref()));
+    let critical_threshold = sub_cfg
+        .and_then(|c| c.critical_threshold)
+        .or_else(|| cw_cfg.and_then(|c| c.critical_threshold));
+    let critical_style = sub_cfg
+        .and_then(|c| c.critical_style.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.critical_style.as_deref()));
+    if let Some(fmt) = sub_cfg
+        .and_then(|c| c.format.as_deref())
+        .or_else(|| cw_cfg.and_then(|c| c.format.as_deref()))
+    {
+        let symbol = sub_cfg
+            .and_then(|c| c.symbol.as_deref())
+            .or_else(|| cw_cfg.and_then(|c| c.symbol.as_deref()));
+        let effective_style = crate::ansi::resolve_threshold_style(
+            Some(val as f64),
+            style,
+            warn_threshold,
+            warn_style,
+            critical_threshold,
+            critical_style,
+        );
+        return crate::format::apply_module_format(fmt, Some(&val_str), symbol, effective_style);
+    }
+    Some(crate::ansi::apply_style_with_threshold(
+        &val_str,
+        Some(val as f64),
+        style,
+        warn_threshold,
+        warn_style,
+        critical_threshold,
+        critical_style,
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{ContextWindowConfig, ContextWindowSubfieldConfig, KeyjeyConfig};
+    use crate::context::{Context, ContextWindow, CurrentUsage};
+
+    fn ctx_full() -> Context {
+        Context {
+            exceeds_200k_tokens: Some(false),
+            context_window: Some(ContextWindow {
+                used_percentage: Some(35.0),
+                remaining_percentage: Some(65.0),
+                context_window_size: Some(200000),
+                total_input_tokens: Some(15234),
+                total_output_tokens: Some(4521),
+                current_usage: Some(CurrentUsage {
+                    input_tokens: Some(8500),
+                    output_tokens: Some(1200),
+                    cache_creation_input_tokens: Some(5000),
+                    cache_read_input_tokens: Some(2000),
+                }),
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_used_percentage_renders_as_integer_no_percent_sign() {
+        let ctx = ctx_full();
+        assert_eq!(
+            render_used_percentage(&ctx, &KeyjeyConfig::default()),
+            Some("35".to_string())
+        );
+    }
+
+    #[test]
+    fn test_remaining_percentage_renders_as_integer() {
+        let ctx = ctx_full();
+        assert_eq!(
+            render_remaining_percentage(&ctx, &KeyjeyConfig::default()),
+            Some("65".to_string())
+        );
+    }
+
+    #[test]
+    fn test_size_reads_context_window_size_field() {
+        let ctx = ctx_full();
+        assert_eq!(
+            render_size(&ctx, &KeyjeyConfig::default()),
+            Some("200000".to_string())
+        );
+    }
+
+    #[test]
+    fn test_total_input_tokens() {
+        let ctx = ctx_full();
+        assert_eq!(
+            render_total_input_tokens(&ctx, &KeyjeyConfig::default()),
+            Some("15234".to_string())
+        );
+    }
+
+    #[test]
+    fn test_total_output_tokens() {
+        let ctx = ctx_full();
+        assert_eq!(
+            render_total_output_tokens(&ctx, &KeyjeyConfig::default()),
+            Some("4521".to_string())
+        );
+    }
+
+    #[test]
+    fn test_exceeds_200k_false_returns_none_no_warn() {
+        let ctx = ctx_full(); // exceeds_200k_tokens = false
+        assert_eq!(render_exceeds_200k(&ctx, &KeyjeyConfig::default()), None);
+    }
+
+    #[test]
+    fn test_exceeds_200k_absent_treated_as_false() {
+        let ctx = Context::default(); // exceeds_200k_tokens = None
+        assert_eq!(render_exceeds_200k(&ctx, &KeyjeyConfig::default()), None);
+    }
+
+    #[test]
+    fn test_exceeds_200k_true_renders_default_symbol() {
+        let ctx = Context {
+            exceeds_200k_tokens: Some(true),
+            ..Default::default()
+        };
+        let result = render_exceeds_200k(&ctx, &KeyjeyConfig::default());
+        assert_eq!(result, Some(">200k".to_string()));
+    }
+
+    #[test]
+    fn test_current_usage_input_tokens() {
+        let ctx = ctx_full();
+        assert_eq!(
+            render_current_usage_input_tokens(&ctx, &KeyjeyConfig::default()),
+            Some("8500".to_string())
+        );
+    }
+
+    #[test]
+    fn test_current_usage_output_tokens() {
+        let ctx = ctx_full();
+        assert_eq!(
+            render_current_usage_output_tokens(&ctx, &KeyjeyConfig::default()),
+            Some("1200".to_string())
+        );
+    }
+
+    #[test]
+    fn test_current_usage_cache_creation_tokens() {
+        let ctx = ctx_full();
+        assert_eq!(
+            render_current_usage_cache_creation_input_tokens(&ctx, &KeyjeyConfig::default()),
+            Some("5000".to_string())
+        );
+    }
+
+    #[test]
+    fn test_current_usage_cache_read_tokens() {
+        let ctx = ctx_full();
+        assert_eq!(
+            render_current_usage_cache_read_input_tokens(&ctx, &KeyjeyConfig::default()),
+            Some("2000".to_string())
+        );
+    }
+
+    #[test]
+    fn test_exceeds_200k_true_renders_custom_symbol() {
+        let ctx = Context {
+            exceeds_200k_tokens: Some(true),
+            ..Default::default()
+        };
+        let cfg = KeyjeyConfig {
+            context_window: Some(ContextWindowConfig {
+                symbol: Some("⚠".to_string()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = render_exceeds_200k(&ctx, &cfg);
+        assert_eq!(result, Some("⚠".to_string()));
+    }
+
+    #[test]
+    fn test_disabled_flag_suppresses_all_renders() {
+        let ctx = ctx_full();
+        let cfg = KeyjeyConfig {
+            context_window: Some(ContextWindowConfig {
+                disabled: Some(true),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(render_used_percentage(&ctx, &cfg), None);
+        assert_eq!(render_size(&ctx, &cfg), None);
+        assert_eq!(render_exceeds_200k(&ctx, &cfg), None);
+    }
+
+    #[test]
+    fn test_absent_context_window_returns_none() {
+        let ctx = Context::default(); // no context_window
+        assert_eq!(render_used_percentage(&ctx, &KeyjeyConfig::default()), None);
+        assert_eq!(render_size(&ctx, &KeyjeyConfig::default()), None);
+        assert_eq!(
+            render_total_input_tokens(&ctx, &KeyjeyConfig::default()),
+            None
+        );
+    }
+
+    // --- AC7: Sub-field threshold tests (Story 9.2) ---
+
+    #[test]
+    fn test_subfield_used_percentage_above_warn_applies_warn_style() {
+        // AC7: used_percentage = 85 > warn_threshold 80 → warn_style applied
+        let ctx = Context {
+            context_window: Some(ContextWindow {
+                used_percentage: Some(85.0),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let cfg = KeyjeyConfig {
+            context_window: Some(ContextWindowConfig {
+                used_percentage: Some(ContextWindowSubfieldConfig {
+                    warn_threshold: Some(80.0),
+                    warn_style: Some("yellow".to_string()),
+                    critical_threshold: Some(95.0),
+                    critical_style: Some("bold red".to_string()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = render_used_percentage(&ctx, &cfg).unwrap();
+        assert!(
+            result.contains('\x1b'),
+            "expected ANSI for warn: {result:?}"
+        );
+        assert!(result.contains("85"), "expected value: {result:?}");
+        // Verify warn style (yellow = \x1b[33m) is distinct from critical
+        assert!(
+            result.contains("\x1b[33m"),
+            "expected yellow ANSI code for warn: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_subfield_used_percentage_above_critical_applies_critical_style() {
+        let ctx = Context {
+            context_window: Some(ContextWindow {
+                used_percentage: Some(97.0),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let cfg = KeyjeyConfig {
+            context_window: Some(ContextWindowConfig {
+                used_percentage: Some(ContextWindowSubfieldConfig {
+                    warn_threshold: Some(80.0),
+                    warn_style: Some("yellow".to_string()),
+                    critical_threshold: Some(95.0),
+                    critical_style: Some("bold red".to_string()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = render_used_percentage(&ctx, &cfg).unwrap();
+        assert!(
+            result.contains('\x1b'),
+            "expected ANSI for critical: {result:?}"
+        );
+        assert!(result.contains("97"), "expected value: {result:?}");
+        // Verify critical style (bold red = \x1b[1;31m combined SGR) is distinct from warn
+        assert!(
+            result.contains("\x1b[1;31m"),
+            "expected bold+red ANSI code for critical: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_subfield_used_percentage_below_warn_uses_base_style() {
+        let ctx = Context {
+            context_window: Some(ContextWindow {
+                used_percentage: Some(50.0),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let cfg = KeyjeyConfig {
+            context_window: Some(ContextWindowConfig {
+                used_percentage: Some(ContextWindowSubfieldConfig {
+                    warn_threshold: Some(80.0),
+                    warn_style: Some("yellow".to_string()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = render_used_percentage(&ctx, &cfg).unwrap();
+        assert!(
+            !result.contains('\x1b'),
+            "no ANSI expected below warn: {result:?}"
+        );
+        assert!(result.contains("50"), "expected value: {result:?}");
+    }
+
+    #[test]
+    fn test_subfield_parent_threshold_used_as_fallback() {
+        // AC3: parent warn_threshold applies when no sub-field threshold is set
+        let ctx = Context {
+            context_window: Some(ContextWindow {
+                used_percentage: Some(85.0),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let cfg = KeyjeyConfig {
+            context_window: Some(ContextWindowConfig {
+                warn_threshold: Some(80.0),
+                warn_style: Some("yellow".to_string()),
+                // no per-sub-field config for used_percentage
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = render_used_percentage(&ctx, &cfg).unwrap();
+        assert!(
+            result.contains('\x1b'),
+            "expected parent threshold fallback ANSI: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_subfield_disabled_flag_suppresses_only_that_subfield() {
+        // AC6: sub-field disabled=true suppresses only that sub-field
+        let ctx = ctx_full(); // used_percentage=35, remaining_percentage=65
+        let cfg = KeyjeyConfig {
+            context_window: Some(ContextWindowConfig {
+                used_percentage: Some(ContextWindowSubfieldConfig {
+                    disabled: Some(true),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        // used_percentage disabled → None
+        assert_eq!(render_used_percentage(&ctx, &cfg), None);
+        // remaining_percentage NOT disabled → still renders
+        assert_eq!(
+            render_remaining_percentage(&ctx, &cfg),
+            Some("65".to_string())
+        );
+    }
+
+    #[test]
+    fn test_subfield_format_with_warn_threshold_uses_warn_style() {
+        // AC5: format path + threshold → threshold-resolved style in apply_module_format
+        let ctx = Context {
+            context_window: Some(ContextWindow {
+                used_percentage: Some(85.0),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let cfg = KeyjeyConfig {
+            context_window: Some(ContextWindowConfig {
+                used_percentage: Some(ContextWindowSubfieldConfig {
+                    format: Some("[$value%]($style)".to_string()),
+                    warn_threshold: Some(80.0),
+                    warn_style: Some("yellow".to_string()),
+                    critical_threshold: Some(95.0),
+                    critical_style: Some("bold red".to_string()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = render_used_percentage(&ctx, &cfg).unwrap();
+        assert!(
+            result.contains('\x1b'),
+            "expected ANSI in format path: {result:?}"
+        );
+        assert!(
+            result.contains("85"),
+            "expected value in format: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_subfield_size_above_warn_applies_warn_style() {
+        // u64 cast coverage for render_size
+        let ctx = Context {
+            context_window: Some(ContextWindow {
+                context_window_size: Some(200000),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let cfg = KeyjeyConfig {
+            context_window: Some(ContextWindowConfig {
+                size: Some(ContextWindowSubfieldConfig {
+                    warn_threshold: Some(150000.0),
+                    warn_style: Some("yellow".to_string()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = render_size(&ctx, &cfg).unwrap();
+        assert!(
+            result.contains('\x1b'),
+            "expected ANSI for size warn: {result:?}"
+        );
+        assert!(result.contains("200000"), "expected value: {result:?}");
+    }
+
+    #[test]
+    fn test_subfield_total_input_tokens_above_warn_applies_warn_style() {
+        // u64 cast coverage for render_total_input_tokens
+        let ctx = Context {
+            context_window: Some(ContextWindow {
+                total_input_tokens: Some(160000),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let cfg = KeyjeyConfig {
+            context_window: Some(ContextWindowConfig {
+                total_input_tokens: Some(ContextWindowSubfieldConfig {
+                    warn_threshold: Some(150000.0),
+                    warn_style: Some("yellow".to_string()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = render_total_input_tokens(&ctx, &cfg).unwrap();
+        assert!(result.contains('\x1b'), "expected ANSI: {result:?}");
+    }
+
+    #[test]
+    fn test_subfield_style_overrides_parent_style() {
+        // AC3: sub-field style takes priority over parent style (no thresholds involved)
+        let ctx = Context {
+            context_window: Some(ContextWindow {
+                used_percentage: Some(50.0),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        // Parent style = green, sub-field style = blue → blue should win
+        let cfg = KeyjeyConfig {
+            context_window: Some(ContextWindowConfig {
+                style: Some("green".to_string()),
+                used_percentage: Some(ContextWindowSubfieldConfig {
+                    style: Some("blue".to_string()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = render_used_percentage(&ctx, &cfg).unwrap();
+        // blue = \x1b[34m, green = \x1b[32m
+        assert!(
+            result.contains("\x1b[34m"),
+            "expected blue (sub-field) style, not green (parent): {result:?}"
+        );
+        assert!(
+            !result.contains("\x1b[32m"),
+            "parent green style should NOT appear: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_remaining_percentage_invert_threshold_fires_when_low() {
+        // invert_threshold=true: warn fires when remaining < warn_threshold (low = bad)
+        let ctx = Context {
+            context_window: Some(ContextWindow {
+                remaining_percentage: Some(15.0), // 15% remaining — below warn=20
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let cfg = KeyjeyConfig {
+            context_window: Some(ContextWindowConfig {
+                remaining_percentage: Some(ContextWindowSubfieldConfig {
+                    invert_threshold: Some(true),
+                    warn_threshold: Some(20.0),
+                    warn_style: Some("yellow".to_string()),
+                    critical_threshold: Some(10.0),
+                    critical_style: Some("bold red".to_string()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = render_remaining_percentage(&ctx, &cfg).unwrap();
+        assert!(
+            result.contains('\x1b'),
+            "expected ANSI for low remaining: {result:?}"
+        );
+        assert!(result.contains("15"), "expected value: {result:?}");
+    }
+
+    #[test]
+    fn test_remaining_percentage_invert_threshold_no_fire_when_high() {
+        // invert_threshold=true: no warn when remaining=85 (healthy)
+        let ctx = Context {
+            context_window: Some(ContextWindow {
+                remaining_percentage: Some(85.0),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let cfg = KeyjeyConfig {
+            context_window: Some(ContextWindowConfig {
+                remaining_percentage: Some(ContextWindowSubfieldConfig {
+                    invert_threshold: Some(true),
+                    warn_threshold: Some(20.0),
+                    warn_style: Some("yellow".to_string()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = render_remaining_percentage(&ctx, &cfg).unwrap();
+        assert!(
+            !result.contains('\x1b'),
+            "expected no ANSI for high remaining: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_remaining_percentage_invert_critical_fires_below_critical_threshold() {
+        // invert_threshold=true: critical fires when remaining < critical_threshold (10)
+        let ctx = Context {
+            context_window: Some(ContextWindow {
+                remaining_percentage: Some(5.0), // 5% remaining — critically low
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let cfg = KeyjeyConfig {
+            context_window: Some(ContextWindowConfig {
+                remaining_percentage: Some(ContextWindowSubfieldConfig {
+                    invert_threshold: Some(true),
+                    warn_threshold: Some(20.0),
+                    warn_style: Some("yellow".to_string()),
+                    critical_threshold: Some(10.0),
+                    critical_style: Some("bold red".to_string()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = render_remaining_percentage(&ctx, &cfg).unwrap();
+        assert!(
+            result.contains("\x1b[1;31m"),
+            "expected bold red for critically low remaining: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_remaining_percentage_invert_does_not_inherit_parent_threshold() {
+        // invert_threshold=true: parent warn_threshold=80 must NOT fire for remaining=85
+        // (85% remaining is healthy — parent threshold is in non-inverted domain)
+        let ctx = Context {
+            context_window: Some(ContextWindow {
+                remaining_percentage: Some(85.0),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let cfg = KeyjeyConfig {
+            context_window: Some(ContextWindowConfig {
+                warn_threshold: Some(80.0), // parent: warn when 80% USED
+                warn_style: Some("yellow".to_string()),
+                remaining_percentage: Some(ContextWindowSubfieldConfig {
+                    invert_threshold: Some(true),
+                    // no subfield thresholds set → nothing fires
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = render_remaining_percentage(&ctx, &cfg).unwrap();
+        assert!(
+            !result.contains('\x1b'),
+            "parent threshold must not fire for remaining_percentage with invert_threshold: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_subfield_no_threshold_unchanged() {
+        // AC8: no threshold fields → output identical to baseline (no regression)
+        let ctx = ctx_full();
+        let result_default = render_used_percentage(&ctx, &KeyjeyConfig::default());
+        let cfg_no_thresh = KeyjeyConfig {
+            context_window: Some(ContextWindowConfig {
+                used_percentage: Some(ContextWindowSubfieldConfig {
+                    ..Default::default() // all None
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result_explicit = render_used_percentage(&ctx, &cfg_no_thresh);
+        assert_eq!(result_default, result_explicit);
+    }
+}

@@ -1,0 +1,36 @@
+# KeyJey signature profile
+[keyjey]
+lines = [
+  "$directory$git_branch$git_status",
+  "$keyjey.model | $keyjey.cost | $keyjey.usage_limits"
+]
+
+[keyjey.model]
+symbol = ""
+style  = "bold fg:#88c0d0"
+
+[keyjey.context_bar]
+symbol             = ""
+width              = 28
+style              = "fg:#8b949e"
+warn_threshold     = 45.0
+warn_style         = "fg:#ebcb8b"
+critical_threshold = 75.0
+critical_style     = "bold fg:#bf616a"
+
+[keyjey.cost]
+symbol             = "$ "
+style              = "fg:#a3be8c"
+warn_threshold     = 1.5
+warn_style         = "fg:#ebcb8b"
+critical_threshold = 4.0
+critical_style     = "bold fg:#bf616a"
+
+[keyjey.usage_limits]
+five_hour_format   = "5h:{pct}%"
+seven_day_format   = "7d:{pct}%"
+separator          = " | "
+warn_threshold     = 60.0
+warn_style         = "fg:#ebcb8b"
+critical_threshold = 85.0
+critical_style     = "bold fg:#bf616a"

@@ -1,0 +1,4 @@
+[keyjey]
+lines = ["$keyjey.model"]
+
+[keyjey.model]

@@ -1,0 +1,2 @@
+[keyjey]
+lines = ["$keyjey.context_window.current_usage.input_tokens $keyjey.context_window.current_usage.output_tokens"]

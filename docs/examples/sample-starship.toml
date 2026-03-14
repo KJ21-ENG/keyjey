@@ -1,0 +1,114 @@
+# Sample Starship configuration
+format = """
+[](#3d414a)\
+$os\
+$username\
+[](bg:#5f6366 fg:#3d414a)\
+$directory\
+[](fg:#5f6366 bg:#4e6e97)\
+$git_branch\
+$git_status\
+[](fg:#4e6e97 bg:#86BBD8)\
+$c\
+$elixir\
+$elm\
+$golang\
+$gradle\
+$haskell\
+$java\
+$julia\
+$nodejs\
+$nim\
+$python\
+$rust\
+$scala\
+[](fg:#86BBD8 bg:#4d7dc5)\
+$docker_context\
+[](fg:#4d7dc5 bg:#ffc878)\
+$cmd_duration\
+[ ](fg:#ffc878)\
+$fill\
+$time\
+$line_break\
+$character\
+"""
+
+add_newline = true
+
+[fill]
+symbol = ". "
+
+[character]
+success_symbol = ' [󱞩](bold green) '
+error_symbol = ' [󱞩](bold red) '
+
+[username]
+disabled = true
+
+[os]
+style = "bg:#3d414a"
+disabled = false
+
+[os.symbols]
+Macos = " "
+Ubuntu = " "
+Windows = "󰍲 "
+
+[directory]
+style = "bg:#5f6366"
+format = "[ $path ]($style)"
+truncation_length = 2
+truncation_symbol = "…/"
+
+[directory.substitutions]
+"Documents" = "󰈙 "
+"Downloads" = " "
+"Music" = " "
+"Pictures" = " "
+"Projects" = " "
+"Developer" = "󰣪 "
+
+[docker_context]
+symbol = " "
+style = "bg:#4d7dc5"
+format = '[ $symbol $context ]($style)'
+
+[git_branch]
+symbol = ""
+style = "bg:#4e6e97"
+format = '[ $symbol $branch ]($style)'
+
+[git_status]
+style = "bg:#4e6e97"
+format = '[$all_status$ahead_behind ]($style)'
+
+[time]
+disabled = false
+time_format = "%R" # Hour:Minute Format
+format = '🕙 $time'
+
+[golang]
+symbol = '🐹'
+style = "bg:#86BBD8"
+format = '[ via $symbol ($version) ]($style)'
+
+[nodejs]
+symbol = '󰎙'
+style = "bg:#86BBD8"
+format = '[ via [$symbol](#00FF00 $style) ($version) ]($style)'
+
+[python]
+symbol = ''
+style = "bg:#86BBD8"
+format = '[ $symbol ($version) \($virtualenv\) ]($style)'
+
+[rust]
+symbol = '🦀'
+style = "bg:#86BBD8"
+format = '[ $symbol ($version) ]($style)'
+
+[cmd_duration]
+min_time = 1
+style = "bg:#ffc878"
+format = '[  $duration]($style)'
+show_milliseconds = true

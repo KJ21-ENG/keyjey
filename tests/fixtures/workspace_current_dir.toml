@@ -1,0 +1,2 @@
+[keyjey]
+lines = ["$keyjey.workspace.current_dir"]

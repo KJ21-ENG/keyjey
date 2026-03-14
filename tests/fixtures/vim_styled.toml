@@ -1,0 +1,6 @@
+[keyjey]
+lines = ["$keyjey.vim"]
+
+[keyjey.vim]
+symbol = "✏ "
+style = "bold yellow"

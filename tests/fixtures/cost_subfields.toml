@@ -1,0 +1,2 @@
+[keyjey]
+lines = ["$keyjey.cost.total_cost_usd $keyjey.cost.total_duration_ms $keyjey.cost.total_api_duration_ms $keyjey.cost.total_lines_added $keyjey.cost.total_lines_removed"]

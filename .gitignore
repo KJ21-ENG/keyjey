@@ -1,0 +1,11 @@
+PRD/
+_bmad*
+.claude/
+.agents/
+.vscode/
+/target
+starship.toml
+install_private.sh
+.DS_Store
+marketing/
+skills-lock.json

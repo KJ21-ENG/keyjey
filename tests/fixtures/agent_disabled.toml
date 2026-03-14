@@ -1,0 +1,5 @@
+[keyjey]
+lines = ["$keyjey.agent"]
+
+[keyjey.agent]
+disabled = true

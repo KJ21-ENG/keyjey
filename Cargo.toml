@@ -1,0 +1,39 @@
+[package]
+name          = "keyjey"
+version       = "0.1.0"
+edition       = "2024"
+description   = "KeyJey - customizable Claude Code statusline renderer"
+license       = "Apache-2.0"
+repository    = "https://github.com/KJ21-ENG/keyjey"
+homepage      = "https://github.com/KJ21-ENG/keyjey"
+documentation = "https://github.com/KJ21-ENG/keyjey"
+keywords      = ["starship", "claude", "statusline", "terminal"]
+categories    = ["command-line-utilities"]
+readme        = "README.md"
+exclude       = [".github/"]
+
+[dependencies]
+clap               = { version = "4.5", features = ["derive"] }
+serde              = { version = "1", features = ["derive"] }
+serde_json         = { version = "1", features = ["preserve_order"] }
+toml               = "1"
+ureq               = { version = "3", features = ["json"] }
+anyhow             = "1"
+thiserror          = "2"
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+nu-ansi-term       = "0.50"
+
+[dev-dependencies]
+rstest     = "0.26"
+assert_cmd = "2"
+predicates = "3"
+tempfile   = "3"
+filetime   = "0.2"
+
+[profile.release]
+opt-level     = 3
+lto           = true
+codegen-units = 1
+panic         = "abort"
+strip         = true

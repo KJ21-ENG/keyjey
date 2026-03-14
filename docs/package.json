@@ -1,0 +1,13 @@
+{
+  "name": "keyjey-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "docs:dev": "vitepress dev --host",
+    "docs:build": "cp ../install.sh public/install.sh && cp -r examples public/examples && vitepress build",
+    "docs:preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.3"
+  }
+}

@@ -1,0 +1,6 @@
+[keyjey]
+lines = ["$keyjey.model"]
+
+[keyjey.model]
+style = "bold green"
+symbol = "★ "
