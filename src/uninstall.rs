@@ -16,7 +16,10 @@ pub fn run() {
 }
 
 fn remove_binary(home: &std::path::Path) {
-    for bin in [home.join(".local/bin/keyjey"), home.join(".cargo/bin/keyjey")] {
+    for bin in [
+        home.join(".local/bin/keyjey"),
+        home.join(".cargo/bin/keyjey"),
+    ] {
         if bin.exists() {
             match std::fs::remove_file(&bin) {
                 Ok(()) => println!("Removed: {}", bin.display()),

@@ -174,8 +174,10 @@ mod tests {
     #[test]
     fn test_tool_not_found_returns_install_hint() {
         // A non-existent binary triggers io::ErrorKind::NotFound on spawn.
-        let result =
-            get_oauth_token_with_cmd("keyjey_nonexistent_tool_xyz", &["lookup", "service", "test"]);
+        let result = get_oauth_token_with_cmd(
+            "keyjey_nonexistent_tool_xyz",
+            &["lookup", "service", "test"],
+        );
         assert!(result.is_err());
         let msg = result.unwrap_err();
         assert!(

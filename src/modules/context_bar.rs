@@ -24,7 +24,9 @@ pub fn render(ctx: &Context, cfg: &KeyjeyConfig) -> Option<String> {
         None => {
             // In early session lifecycle this field can be absent; render a baseline bar
             // so layout stays stable instead of collapsing to an empty slot.
-            tracing::warn!("keyjey.context_bar: used_percentage absent from context — defaulting to 0%");
+            tracing::warn!(
+                "keyjey.context_bar: used_percentage absent from context — defaulting to 0%"
+            );
             0.0
         }
     };
@@ -129,7 +131,10 @@ mod tests {
     fn test_context_bar_absent_context_window_returns_none() {
         let ctx = Context::default();
         let result = render(&ctx, &KeyjeyConfig::default()).unwrap();
-        assert!(result.contains("0%"), "expected fallback 0% bar: {result:?}");
+        assert!(
+            result.contains("0%"),
+            "expected fallback 0% bar: {result:?}"
+        );
         let filled: usize = result.chars().filter(|&c| c == '█').count();
         assert_eq!(filled, 0, "fallback bar at 0% should have no filled blocks");
     }
