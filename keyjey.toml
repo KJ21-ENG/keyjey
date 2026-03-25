@@ -27,8 +27,8 @@ critical_threshold = 4.0
 critical_style     = "bold fg:#bf616a"
 
 [keyjey.usage_limits]
-five_hour_format   = "5h:{pct}%"
-seven_day_format   = "7d:{pct}%"
+five_hour_format   = "5h:{pct}%({reset})"
+seven_day_format   = "7d:{pct}%({reset})"
 separator          = " | "
 warn_threshold     = 60.0
 warn_style         = "fg:#ebcb8b"
