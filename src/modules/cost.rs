@@ -29,7 +29,7 @@ pub fn render(ctx: &Context, cfg: &KeyjeyConfig) -> Option<String> {
 
     let symbol = cost_cfg.and_then(|c| c.symbol.as_deref());
     let style = cost_cfg.and_then(|c| c.style.as_deref());
-    let formatted = format!("${:.2}", val);
+    let formatted = format!("${val:.2}");
 
     // Extract threshold variables FIRST (before format check)
     let warn_threshold = cost_cfg.and_then(|c| c.warn_threshold);
@@ -79,7 +79,7 @@ pub fn render_total_cost_usd(ctx: &Context, cfg: &KeyjeyConfig) -> Option<String
             return None;
         }
     };
-    let val_str = format!("{:.4}", val);
+    let val_str = format!("{val:.4}");
     let style = sub_cfg.and_then(|c| c.style.as_deref());
     // Extract threshold variables FIRST (before format check)
     let warn_threshold = sub_cfg.and_then(|c| c.warn_threshold);

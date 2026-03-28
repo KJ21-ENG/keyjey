@@ -38,7 +38,7 @@ pub fn render_used_percentage(ctx: &Context, cfg: &KeyjeyConfig) -> Option<Strin
             return None;
         }
     };
-    let val_str = format!("{:.0}", val);
+    let val_str = format!("{val:.0}");
     let style = sub_cfg
         .and_then(|c| c.style.as_deref())
         .or_else(|| cw_cfg.and_then(|c| c.style.as_deref()));
@@ -103,7 +103,7 @@ pub fn render_remaining_percentage(ctx: &Context, cfg: &KeyjeyConfig) -> Option<
             return None;
         }
     };
-    let val_str = format!("{:.0}", val);
+    let val_str = format!("{val:.0}");
     let style = sub_cfg
         .and_then(|c| c.style.as_deref())
         .or_else(|| cw_cfg.and_then(|c| c.style.as_deref()));

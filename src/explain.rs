@@ -62,8 +62,7 @@ pub fn run(config_override: Option<&std::path::Path>) -> String {
         };
 
         lines.push(format!(
-            "{:<mod_w$} {:<VAL_W$} {}",
-            display_name, display_value, config_col
+            "{display_name:<mod_w$} {display_value:<VAL_W$} {config_col}"
         ));
     }
 

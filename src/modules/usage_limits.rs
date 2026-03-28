@@ -179,7 +179,7 @@ fn format_time_until(resets_at: &str) -> String {
     } else if hours > 0 {
         format!("{}h{}m", hours, mins % 60)
     } else {
-        format!("{}m", mins)
+        format!("{mins}m")
     }
 }
 

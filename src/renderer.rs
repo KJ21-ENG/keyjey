@@ -74,8 +74,6 @@ fn parse_line(line: &str) -> Vec<Token> {
                         tokens.push(Token::Literal(String::new()));
                     } else if name.starts_with("keyjey.") {
                         tokens.push(Token::Native(name.to_string()));
-                    } else if name.starts_with("keyjey.") {
-                        tokens.push(Token::Native(name.to_string()));
                     } else {
                         tokens.push(Token::Passthrough(name.to_string()));
                     }

@@ -40,7 +40,7 @@ pub fn render(ctx: &Context, cfg: &KeyjeyConfig) -> Option<String> {
     let empty = width - filled;
 
     let bar: String = "█".repeat(filled) + &"░".repeat(empty);
-    let bar_content = format!("{bar}{:.0}%", used_pct);
+    let bar_content = format!("{bar}{used_pct:.0}%");
 
     let symbol = bar_cfg.and_then(|c| c.symbol.as_deref());
     let style = bar_cfg.and_then(|c| c.style.as_deref());
