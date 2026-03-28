@@ -1,6 +1,6 @@
 {
   "name": "keyjey",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "KeyJey - customizable Claude Code statusline renderer",
   "license": "Apache-2.0",
   "homepage": "https://github.com/KJ21-ENG/keyjey",
@@ -12,11 +12,13 @@
     "url": "https://github.com/KJ21-ENG/keyjey/issues"
   },
   "bin": {
-    "keyjey": "./bin/keyjey.js"
+    "keyjey": "./bin/keyjey.js",
+    "keyjey-remaining": "./bin/keyjey-remaining.js"
   },
   "files": [
     "bin/",
     "scripts/",
+    "keyjey.toml",
     "README.md",
     "LICENSE"
   ],
@@ -33,7 +35,8 @@
   },
   "scripts": {
     "postinstall": "node ./scripts/postinstall.cjs",
-    "test:npm": "KEYJEY_BINARY_PATH=$(command -v keyjey) node ./bin/keyjey.js --help"
+    "test:npm": "KEYJEY_BINARY_PATH=$(command -v keyjey) node ./bin/keyjey.js --help",
+    "test:npm:install": "tmp=$(mktemp -d) && HOME=\"$tmp\" npm_config_global=true KEYJEY_BINARY_PATH=$(command -v keyjey) node ./scripts/postinstall.cjs && test -f \"$tmp/.config/keyjey.toml\" && test -f \"$tmp/.claude/settings.json\" && rm -rf \"$tmp\""
   },
   "publishConfig": {
     "access": "public"

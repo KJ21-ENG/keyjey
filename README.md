@@ -32,6 +32,12 @@ npx keyjey --help
 
 `npm`/`npx` installs a small launcher that downloads the correct prebuilt Rust binary for your platform from GitHub Releases.
 
+When installed globally with `npm i -g keyjey`, the package also:
+
+- creates `~/.config/keyjey.toml` if it does not exist
+- wires `~/.claude/settings.json` to use `keyjey-remaining` if no status line is configured yet
+- installs both `keyjey` and `keyjey-remaining` commands
+
 Then wire `~/.claude/settings.json`:
 
 ```json
