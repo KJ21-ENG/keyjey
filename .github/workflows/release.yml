@@ -128,7 +128,8 @@ jobs:
     needs: release
     if: "!cancelled() && needs.release.result == 'success'"
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -147,7 +148,8 @@ jobs:
     needs: release
     if: "!cancelled() && needs.release.result == 'success'"
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
