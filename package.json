@@ -1,0 +1,48 @@
+{
+  "name": "keyjey",
+  "version": "0.1.0",
+  "description": "KeyJey - customizable Claude Code statusline renderer",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/KJ21-ENG/keyjey",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KJ21-ENG/keyjey.git"
+  },
+  "bugs": {
+    "url": "https://github.com/KJ21-ENG/keyjey/issues"
+  },
+  "bin": {
+    "keyjey": "./bin/keyjey.js"
+  },
+  "files": [
+    "bin/",
+    "scripts/",
+    "README.md",
+    "LICENSE"
+  ],
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "postinstall": "node ./scripts/postinstall.cjs",
+    "test:npm": "KEYJEY_BINARY_PATH=$(command -v keyjey) node ./bin/keyjey.js --help"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "claude",
+    "statusline",
+    "terminal",
+    "starship",
+    "rust"
+  ]
+}

@@ -123,6 +123,25 @@ jobs:
           tag_name: ${{ github.event.inputs.version || github.ref_name }}
           files: keyjey-*/keyjey-*
 
+  publish-npm:
+    name: Publish to npm
+    needs: release
+    if: "!cancelled() && needs.release.result == 'success'"
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.version || github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+
   publish:
     name: Publish to crates.io
     needs: release

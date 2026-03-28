@@ -4,6 +4,8 @@ _bmad*
 .agents/
 .vscode/
 /target
+.keyjey-bin/
+keyjey-*.tgz
 starship.toml
 install_private.sh
 .DS_Store

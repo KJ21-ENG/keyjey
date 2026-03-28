@@ -18,14 +18,19 @@
 
 ## 🚀 Install
 
-### ⚡ Method 1: Build from source (recommended for this fork)
+### ⚡ Method 1: npm / npx
 
 ```sh
-git clone <your-keyjey-repo-url>
-cd keyjey
-cargo build --release
-install -m 0755 ./target/release/keyjey ~/.local/bin/keyjey
+npm i -g keyjey
 ```
+
+Or run it without a global install:
+
+```sh
+npx keyjey --help
+```
+
+`npm`/`npx` installs a small launcher that downloads the correct prebuilt Rust binary for your platform from GitHub Releases.
 
 Then wire `~/.claude/settings.json`:
 
@@ -35,21 +40,26 @@ Then wire `~/.claude/settings.json`:
 }
 ```
 
-### 📦 Method 2: cargo install
+### 📦 Method 2: Build from source
 
 Requires the Rust toolchain.
 
 ```sh
-cargo install keyjey
+git clone https://github.com/KJ21-ENG/keyjey.git
+cd keyjey
+cargo build --release
+install -m 0755 ./target/release/keyjey ~/.local/bin/keyjey
 ```
 
-After installing with `cargo`, wire the statusline manually in `~/.claude/settings.json`:
+Then wire the statusline manually in `~/.claude/settings.json`:
 
 ```json
 {
   "statusLine": { "type": "command", "command": "keyjey" }
 }
 ```
+
+Native Windows is not supported yet. For Windows machines, use WSL2 and install the Linux package inside WSL.
 
 ## ⚙️ Configuration
 

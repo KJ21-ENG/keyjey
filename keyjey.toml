@@ -2,7 +2,8 @@
 [keyjey]
 lines = [
   "$directory$git_branch$git_status",
-  "$keyjey.model | $keyjey.cost | $keyjey.usage_limits"
+  "$keyjey.model | $keyjey.cost | ctx:$keyjey.context_bar",
+  "$keyjey.usage_limits"
 ]
 
 [keyjey.model]
@@ -11,7 +12,7 @@ style  = "bold fg:#88c0d0"
 
 [keyjey.context_bar]
 symbol             = ""
-width              = 28
+width              = 10
 style              = "fg:#8b949e"
 warn_threshold     = 45.0
 warn_style         = "fg:#ebcb8b"
