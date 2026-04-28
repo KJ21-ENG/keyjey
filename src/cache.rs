@@ -243,10 +243,10 @@ pub fn read_usage_limits_global(
     transcript_path: &Path,
     allow_stale: bool,
 ) -> Option<UsageLimitsData> {
-    if let Some(path) = global_cache_dir().map(|dir| dir.join("usage-limits.json")) {
-        if let Some(data) = read_usage_limits_from_path(&path, allow_stale) {
-            return Some(data);
-        }
+    if let Some(path) = global_cache_dir().map(|dir| dir.join("usage-limits.json"))
+        && let Some(data) = read_usage_limits_from_path(&path, allow_stale)
+    {
+        return Some(data);
     }
     read_usage_limits(transcript_path, allow_stale)
 }
