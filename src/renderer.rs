@@ -136,12 +136,52 @@ pub fn render(lines: &[String], ctx: &Context, cfg: &KeyjeyConfig) -> String {
         lines
     };
 
-    effective_lines
+    let mut rendered_lines = effective_lines
         .iter()
         .map(|line| render_line(line, ctx, cfg))
         .filter(|line| !line.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n")
+        .collect::<Vec<_>>();
+
+    if cfg.truncate.unwrap_or(true)
+        && let Some(width) = detect_terminal_width(cfg)
+    {
+        rendered_lines = rendered_lines
+            .into_iter()
+            .map(|line| crate::ansi::truncate_to_visible_width(&line, width, true))
+            .collect();
+    }
+
+    rendered_lines.join("\n")
+}
+
+fn detect_terminal_width(cfg: &KeyjeyConfig) -> Option<usize> {
+    if let Some(width) = cfg.max_width
+        && width > 0
+    {
+        return Some(width as usize);
+    }
+    if let Ok(columns) = std::env::var("COLUMNS")
+        && let Ok(width) = columns.parse::<usize>()
+        && width > 0
+    {
+        return Some(width);
+    }
+
+    #[cfg(unix)]
+    {
+        let tty = std::fs::File::open("/dev/tty").ok()?;
+        let (terminal_size::Width(width), _) = terminal_size::terminal_size_of(tty)?;
+        return Some(width as usize);
+    }
+
+    #[cfg(windows)]
+    {
+        let (terminal_size::Width(width), _) = terminal_size::terminal_size()?;
+        return Some(width as usize);
+    }
+
+    #[allow(unreachable_code)]
+    None
 }
 
 #[cfg(test)]
@@ -339,6 +379,40 @@ mod tests {
         let lines = cfg.lines.as_deref().unwrap_or(&[]);
         let result = render(lines, &ctx, &cfg);
         assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn test_render_truncates_when_max_width_set() {
+        let ctx = Context::default();
+        let cfg = KeyjeyConfig {
+            max_width: Some(5),
+            ..Default::default()
+        };
+        let rendered = render(&["abcdef".to_string()], &ctx, &cfg);
+        assert_eq!(rendered, "abcd…");
+    }
+
+    #[test]
+    fn test_render_does_not_truncate_when_truncate_false() {
+        let ctx = Context::default();
+        let cfg = KeyjeyConfig {
+            truncate: Some(false),
+            max_width: Some(5),
+            ..Default::default()
+        };
+        let rendered = render(&["abcdef".to_string()], &ctx, &cfg);
+        assert_eq!(rendered, "abcdef");
+    }
+
+    #[test]
+    fn test_render_truncates_each_line_independently() {
+        let ctx = Context::default();
+        let cfg = KeyjeyConfig {
+            max_width: Some(4),
+            ..Default::default()
+        };
+        let rendered = render(&["abcdef".to_string(), "xy".to_string()], &ctx, &cfg);
+        assert_eq!(rendered, "abc…\nxy");
     }
 
     #[test]

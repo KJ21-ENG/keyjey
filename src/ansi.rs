@@ -122,6 +122,70 @@ pub fn strip_ansi(s: &str) -> String {
     out
 }
 
+/// Count visible characters while ignoring ANSI CSI escape sequences.
+///
+/// This intentionally counts Unicode scalar values rather than terminal display
+/// cells. Wide-character width is a known v1 limitation.
+pub fn visible_width(s: &str) -> usize {
+    strip_ansi(s).chars().count()
+}
+
+/// Truncate a possibly-styled string to a visible character budget.
+///
+/// ANSI CSI sequences do not count toward the budget and are preserved. When a
+/// styled string is cut, a final reset is appended so terminal styling does not
+/// leak into the prompt.
+pub fn truncate_to_visible_width(s: &str, max: usize, ellipsis: bool) -> String {
+    if max == 0 {
+        return String::new();
+    }
+    if visible_width(s) <= max {
+        return s.to_string();
+    }
+
+    let ellipsis_str = if ellipsis { "…" } else { "" };
+    let content_budget = max.saturating_sub(ellipsis_str.chars().count());
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    let mut visible = 0usize;
+    let mut emitted_ansi = false;
+    let mut truncated = false;
+
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' && chars.peek() == Some(&'[') {
+            out.push(ch);
+            out.push(chars.next().unwrap());
+            let mut sequence = String::new();
+            for c2 in chars.by_ref() {
+                out.push(c2);
+                sequence.push(c2);
+                if c2.is_ascii_alphabetic() {
+                    if c2 != 'm' || sequence != "0m" {
+                        emitted_ansi = true;
+                    }
+                    break;
+                }
+            }
+            continue;
+        }
+
+        if visible >= content_budget {
+            truncated = true;
+            break;
+        }
+        out.push(ch);
+        visible += 1;
+    }
+
+    if truncated && ellipsis {
+        out.push_str(ellipsis_str);
+    }
+    if truncated && emitted_ansi {
+        out.push_str("\x1b[0m");
+    }
+    out
+}
+
 fn parse_color(name: &str) -> Option<Color> {
     match name {
         "black" => Some(Color::Black),
@@ -441,5 +505,54 @@ mod tests {
             "unexpected ANSI for 256: {result:?}"
         );
         assert_eq!(result, "text");
+    }
+
+    #[test]
+    fn test_visible_width_strips_ansi() {
+        let styled = apply_style("hello", Some("bold red"));
+        assert_eq!(visible_width(&styled), 5);
+    }
+
+    #[test]
+    fn test_visible_width_handles_multiple_sgr_runs() {
+        let s = format!(
+            "{}{}",
+            apply_style("hi", Some("bold")),
+            apply_style("there", Some("green"))
+        );
+        assert_eq!(visible_width(&s), 7);
+    }
+
+    #[test]
+    fn test_truncate_no_ansi_short_string_unchanged() {
+        assert_eq!(truncate_to_visible_width("short", 10, true), "short");
+    }
+
+    #[test]
+    fn test_truncate_no_ansi_long_string_cuts_with_ellipsis() {
+        assert_eq!(truncate_to_visible_width("abcdef", 4, true), "abc…");
+    }
+
+    #[test]
+    fn test_truncate_preserves_ansi_styling_around_cut() {
+        let styled = apply_style("abcdef", Some("bold red"));
+        let truncated = truncate_to_visible_width(&styled, 4, true);
+        assert!(truncated.contains('\x1b'));
+        assert!(truncated.contains("abc…"));
+        assert!(truncated.ends_with("\x1b[0m"));
+        assert_eq!(visible_width(&truncated), 4);
+    }
+
+    #[test]
+    fn test_truncate_ellipsis_counts_toward_budget() {
+        assert_eq!(
+            visible_width(&truncate_to_visible_width("abcdef", 3, true)),
+            3
+        );
+    }
+
+    #[test]
+    fn test_truncate_zero_budget_returns_empty_string() {
+        assert_eq!(truncate_to_visible_width("abcdef", 0, true), "");
     }
 }

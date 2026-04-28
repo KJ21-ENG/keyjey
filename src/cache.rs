@@ -10,13 +10,12 @@
 //! Format: JSON envelope `{ "data": {...}, "expires_at": u64, "five_hour_resets_at": u64, "seven_day_resets_at": u64 }`
 //! The OAuth token is NEVER written to any cache file (NFR-S3).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::usage_limits::UsageLimitsData;
 
 const PASSTHROUGH_TTL: Duration = Duration::from_secs(5);
-
 /// Derive the cache file path for a passthrough module.
 /// Sanitizes `module_name` by replacing `/` and space with `_`.
 fn passthrough_cache_path(module_name: &str, transcript_path: &Path) -> Option<std::path::PathBuf> {
@@ -110,6 +109,45 @@ fn now_epoch() -> u64 {
         .unwrap_or(0)
 }
 
+/// Resolve the shared OS cache directory for KeyJey.
+///
+/// Example on macOS: `~/Library/Caches/keyjey`.
+pub fn global_cache_dir() -> Option<PathBuf> {
+    if std::env::var_os("KEYJEY_DISABLE_GLOBAL_CACHE").is_some() {
+        return None;
+    }
+    #[cfg(test)]
+    {
+        let thread_id = format!("{:?}", std::thread::current().id())
+            .replace(['(', ')', ' '], "_")
+            .replace('"', "");
+        Some(std::env::temp_dir().join(format!("keyjey-test-{}-{thread_id}", std::process::id())))
+    }
+    #[cfg(not(test))]
+    dirs::cache_dir().map(|dir| dir.join("keyjey"))
+}
+
+/// Atomically write content to a file, creating parent directories first.
+///
+/// Cache writes are best-effort. I/O errors are intentionally ignored so a cache
+/// failure never breaks statusline rendering.
+pub(crate) fn atomic_write(path: &Path, content: &[u8]) {
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    if std::fs::create_dir_all(parent).is_err() {
+        return;
+    }
+    let tmp = parent.join(format!(
+        ".{}.{}.tmp",
+        path.file_name().and_then(|n| n.to_str()).unwrap_or("cache"),
+        std::process::id()
+    ));
+    if std::fs::write(&tmp, content).is_ok() {
+        let _ = std::fs::rename(tmp, path);
+    }
+}
+
 /// Convert an ISO 8601 `resets_at` string to epoch seconds for cache comparison.
 /// Returns `u64::MAX` when the input is empty or unparseable — meaning "no reset
 /// scheduled, never trigger early invalidation via this field."
@@ -166,7 +204,126 @@ pub fn write_usage_limits(transcript_path: &Path, data: &UsageLimitsData, ttl_se
         seven_day_resets_at: epoch_or_never(&data.seven_day_resets_at),
     };
     if let Ok(json) = serde_json::to_string(&envelope) {
-        let _ = std::fs::write(path, json);
+        atomic_write(&path, json.as_bytes());
+    }
+}
+
+fn read_usage_limits_from_path(path: &Path, allow_stale: bool) -> Option<UsageLimitsData> {
+    let raw = std::fs::read_to_string(path).ok()?;
+    let envelope: UsageLimitsCacheEnvelope = serde_json::from_str(&raw).ok()?;
+    if allow_stale {
+        return Some(envelope.data);
+    }
+    let now = now_epoch();
+    if now >= envelope.expires_at {
+        return None;
+    }
+    if now >= envelope.five_hour_resets_at || now >= envelope.seven_day_resets_at {
+        return None;
+    }
+    Some(envelope.data)
+}
+
+fn write_usage_limits_to_path(path: &Path, data: &UsageLimitsData, ttl_secs: u64) {
+    let now = now_epoch();
+    let envelope = UsageLimitsCacheEnvelope {
+        data: data.clone(),
+        expires_at: now + ttl_secs,
+        five_hour_resets_at: epoch_or_never(&data.five_hour_resets_at),
+        seven_day_resets_at: epoch_or_never(&data.seven_day_resets_at),
+    };
+    if let Ok(json) = serde_json::to_string(&envelope) {
+        atomic_write(path, json.as_bytes());
+    }
+}
+
+/// Read usage limits from the shared cache, falling back to the legacy
+/// per-transcript cache when the shared cache directory cannot be resolved.
+pub fn read_usage_limits_global(
+    transcript_path: &Path,
+    allow_stale: bool,
+) -> Option<UsageLimitsData> {
+    if let Some(path) = global_cache_dir().map(|dir| dir.join("usage-limits.json")) {
+        if let Some(data) = read_usage_limits_from_path(&path, allow_stale) {
+            return Some(data);
+        }
+    }
+    read_usage_limits(transcript_path, allow_stale)
+}
+
+/// Write usage limits to the shared cache, falling back to the legacy
+/// per-transcript cache when the shared cache directory cannot be resolved.
+pub fn write_usage_limits_global(transcript_path: &Path, data: &UsageLimitsData, ttl_secs: u64) {
+    if let Some(path) = global_cache_dir().map(|dir| dir.join("usage-limits.json")) {
+        write_usage_limits_to_path(&path, data, ttl_secs);
+    } else {
+        write_usage_limits(transcript_path, data, ttl_secs);
+    }
+}
+
+fn sanitize_filename(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
+            out.push(ch);
+        } else {
+            out.push('_');
+        }
+    }
+    if out.is_empty() {
+        "cache".to_string()
+    } else {
+        out
+    }
+}
+
+fn fnv1a_32(s: &str) -> u32 {
+    let mut hash = 0x811c9dc5u32;
+    for b in s.as_bytes() {
+        hash ^= u32::from(*b);
+        hash = hash.wrapping_mul(0x01000193);
+    }
+    hash
+}
+
+fn keyed_cache_path(namespace: &str, key_path: &Path) -> Option<PathBuf> {
+    let base = global_cache_dir()?;
+    let key = key_path
+        .canonicalize()
+        .unwrap_or_else(|_| key_path.to_path_buf());
+    let key_str = key.to_string_lossy();
+    let basename = key_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(sanitize_filename)
+        .unwrap_or_else(|| "cache".to_string());
+    let hash = fnv1a_32(&key_str);
+    Some(
+        base.join(sanitize_filename(namespace))
+            .join(format!("{basename}-{hash:08x}")),
+    )
+}
+
+/// Read a cache entry keyed by a filesystem path.
+///
+/// The entry is valid only when the cache file's mtime is newer than or equal to
+/// `key_path`'s mtime. Returns `None` on miss, stale entry, or I/O error.
+pub fn read_keyed_cache(namespace: &str, key_path: &Path) -> Option<String> {
+    let path = keyed_cache_path(namespace, key_path)?;
+    let cache_meta = std::fs::metadata(&path).ok()?;
+    let key_meta = std::fs::metadata(key_path).ok()?;
+    let cache_mtime = cache_meta.modified().ok()?;
+    let key_mtime = key_meta.modified().ok()?;
+    if cache_mtime < key_mtime {
+        return None;
+    }
+    std::fs::read_to_string(path).ok()
+}
+
+/// Write a path-keyed cache entry.
+pub fn write_keyed_cache(namespace: &str, key_path: &Path, content: &str) {
+    if let Some(path) = keyed_cache_path(namespace, key_path) {
+        atomic_write(&path, content.as_bytes());
     }
 }
 
@@ -553,5 +710,77 @@ mod tests {
         let result = read_usage_limits(&transcript, false);
         assert!(result.is_some(), "cache with 300s TTL should be valid");
         drop(dir);
+    }
+
+    #[test]
+    fn test_global_cache_dir_returns_some() {
+        assert!(global_cache_dir().is_some());
+    }
+
+    #[test]
+    fn test_atomic_write_creates_dir_and_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("deep/cache.txt");
+        atomic_write(&path, b"hello");
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "hello");
+    }
+
+    #[test]
+    fn test_atomic_write_replaces_existing_atomically() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("cache.txt");
+        atomic_write(&path, b"old");
+        atomic_write(&path, b"new");
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "new");
+    }
+
+    #[test]
+    fn test_keyed_cache_miss_when_key_newer() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = dir.path().join("settings.json");
+        std::fs::write(&key, "{}").unwrap();
+        write_keyed_cache("reasoning-test-newer", &key, "low");
+        let newer = SystemTime::now() + Duration::from_secs(5);
+        filetime::set_file_mtime(&key, filetime::FileTime::from_system_time(newer)).unwrap();
+        assert_eq!(read_keyed_cache("reasoning-test-newer", &key), None);
+    }
+
+    #[test]
+    fn test_keyed_cache_hit_when_key_older() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = dir.path().join("settings.json");
+        std::fs::write(&key, "{}").unwrap();
+        let older = SystemTime::now() - Duration::from_secs(5);
+        filetime::set_file_mtime(&key, filetime::FileTime::from_system_time(older)).unwrap();
+        write_keyed_cache("reasoning-test-older", &key, "high");
+        assert_eq!(
+            read_keyed_cache("reasoning-test-older", &key),
+            Some("high".to_string())
+        );
+    }
+
+    #[test]
+    fn test_keyed_cache_namespace_isolation() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = dir.path().join("settings.json");
+        std::fs::write(&key, "{}").unwrap();
+        write_keyed_cache("namespace-a", &key, "low");
+        assert_eq!(read_keyed_cache("namespace-b", &key), None);
+    }
+
+    #[test]
+    fn test_global_usage_limits_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let transcript = dir.path().join("test.jsonl");
+        let data = UsageLimitsData {
+            five_hour_pct: 12.0,
+            seven_day_pct: 34.0,
+            five_hour_resets_at: "2099-01-01T00:00:00Z".into(),
+            seven_day_resets_at: "2099-01-01T00:00:00Z".into(),
+        };
+        write_usage_limits_global(&transcript, &data, 60);
+        let read = read_usage_limits_global(&transcript, false).unwrap();
+        assert_eq!(read.five_hour_pct, 12.0);
+        assert_eq!(read.seven_day_pct, 34.0);
     }
 }

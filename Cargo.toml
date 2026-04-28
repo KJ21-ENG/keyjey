@@ -1,6 +1,6 @@
 [package]
 name          = "keyjey"
-version       = "0.1.1"
+version       = "0.1.2"
 edition       = "2024"
 description   = "KeyJey - customizable Claude Code statusline renderer"
 license       = "Apache-2.0"
@@ -23,6 +23,8 @@ thiserror          = "2"
 tracing            = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 nu-ansi-term       = "0.50"
+dirs               = "5"
+terminal_size      = "0.4"
 
 [dev-dependencies]
 rstest     = "0.26"

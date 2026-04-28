@@ -106,9 +106,27 @@ Everything in the [Claude Code status line documentation](https://code.claude.co
 | `$keyjey.context_bar` | Visual progress bar of context window usage |
 | `$keyjey.context_window` | Context window tokens (used/total) |
 | `$keyjey.usage_limits` | API usage limits (5hr / 7-day) |
+| `$keyjey.session_name` | Session name derived from the transcript's first user message |
+| `$keyjey.reasoning` | Claude Code reasoning effort from `.claude/settings.json` |
 | `$keyjey.agent` | Sub-agent name |
 | `$keyjey.session` | Session identity info |
 | `$keyjey.workspace` | Workspace/project directory |
+
+### Terminal width
+
+KeyJey truncates each rendered statusline row to the detected terminal width by default. This prevents narrow terminals from wrapping the statusline into the prompt area. You can override or disable it:
+
+```toml
+[keyjey]
+truncate = true
+max_width = 80
+```
+
+Set `truncate = false` to restore the old unbounded behavior.
+
+### Usage limits cache note
+
+`$keyjey.usage_limits` uses a shared OS cache at `keyjey/usage-limits.json`, so sibling Claude Code windows can reuse fresh usage data instead of making duplicate HTTP calls. An idle Claude Code window still cannot update by itself; it will show stale text until Claude Code invokes KeyJey in that window again. The shared cache only ensures the next render sees data fetched by another window.
 
 Full configuration reference: **https://github.com/KJ21-ENG/keyjey**
 

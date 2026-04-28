@@ -3,7 +3,9 @@ pub mod context_bar;
 pub mod context_window;
 pub mod cost;
 pub mod model;
+pub mod reasoning;
 pub mod session;
+pub mod session_name;
 pub mod usage_limits;
 pub mod vim;
 pub mod workspace;
@@ -43,6 +45,8 @@ pub const ALL_NATIVE_MODULES: &[&str] = &[
     "keyjey.workspace.current_dir",
     "keyjey.workspace.project_dir",
     "keyjey.usage_limits",
+    "keyjey.session_name",
+    "keyjey.reasoning",
 ];
 
 /// Static dispatch registry — the ONLY file modified when adding a new native module.
@@ -114,6 +118,9 @@ pub fn render_module(
         "keyjey.workspace.project_dir" => workspace::render_project_dir(ctx, cfg),
         // Usage limits module — non-blocking thread dispatch for live API data
         "keyjey.usage_limits" => usage_limits::render(ctx, cfg),
+        // Derived session metadata
+        "keyjey.session_name" => session_name::render(ctx, cfg),
+        "keyjey.reasoning" => reasoning::render(ctx, cfg),
         other => {
             tracing::warn!("keyjey: unknown native module '{other}' — skipping");
             None

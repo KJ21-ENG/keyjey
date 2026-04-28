@@ -19,6 +19,12 @@ pub struct KeyjeyConfig {
     pub session: Option<SessionConfig>,
     pub workspace: Option<WorkspaceConfig>,
     pub usage_limits: Option<UsageLimitsConfig>,
+    pub session_name: Option<SessionNameConfig>,
+    pub reasoning: Option<ReasoningConfig>,
+    /// Enable terminal-width truncation. Defaults to true when absent.
+    pub truncate: Option<bool>,
+    /// Explicit max render width. Overrides terminal detection when set.
+    pub max_width: Option<u32>,
 }
 
 /// Per-module config fields shared by all native KeyJey modules.
@@ -194,6 +200,28 @@ pub struct UsageLimitsConfig {
     pub five_hour_format: Option<String>,
     pub seven_day_format: Option<String>,
     pub separator: Option<String>,
+}
+
+/// Configuration for `[keyjey.session_name]`.
+#[derive(Debug, Deserialize, Default)]
+pub struct SessionNameConfig {
+    pub style: Option<String>,
+    pub symbol: Option<String>,
+    pub disabled: Option<bool>,
+    pub format: Option<String>,
+    /// Maximum visible characters from the first user message. Default: 40.
+    pub max_length: Option<usize>,
+}
+
+/// Configuration for `[keyjey.reasoning]`.
+#[derive(Debug, Deserialize, Default)]
+pub struct ReasoningConfig {
+    pub style: Option<String>,
+    pub symbol: Option<String>,
+    pub disabled: Option<bool>,
+    pub format: Option<String>,
+    /// Label rendered when no Claude Code effortLevel can be found. Default: "?".
+    pub unknown_label: Option<String>,
 }
 
 /// Result of a config load operation — includes the loaded config and its source.

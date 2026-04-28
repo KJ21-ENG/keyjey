@@ -1,6 +1,6 @@
 //! Usage limits module — renders 5h and 7d API utilization with time-to-reset.
 //!
-//! On cache hit: reads directly from `cache::read_usage_limits`, no thread.
+//! On cache hit: reads directly from `cache::read_usage_limits_global`, no thread.
 //! On cache miss: dispatches `fetch_usage_limits` via `std::thread::spawn` and waits
 //! up to 2 seconds via `mpsc::recv_timeout`. Falls back to last cache or empty.
 //!
@@ -35,7 +35,7 @@ pub fn render(ctx: &Context, cfg: &KeyjeyConfig) -> Option<String> {
     let transcript_path = std::path::Path::new(transcript_str);
 
     // Step 3: cache hit → render immediately
-    let data = if let Some(cached) = cache::read_usage_limits(transcript_path, false) {
+    let data = if let Some(cached) = cache::read_usage_limits_global(transcript_path, false) {
         cached
     } else {
         // Step 4a: get OAuth token
@@ -54,12 +54,12 @@ pub fn render(ctx: &Context, cfg: &KeyjeyConfig) -> Option<String> {
         match fetch_with_timeout(move || crate::usage_limits::fetch_usage_limits(&token)) {
             Some(fresh) => {
                 // Step 4c: write fresh data to cache for future renders
-                cache::write_usage_limits(transcript_path, &fresh, ttl_secs);
+                cache::write_usage_limits_global(transcript_path, &fresh, ttl_secs);
                 fresh
             }
             // AC #4: on timeout or API error, fall back to last cached value (may be stale)
             // Do NOT write stale data back to cache — that would falsely reset the TTL
-            None => cache::read_usage_limits(transcript_path, true)?,
+            None => cache::read_usage_limits_global(transcript_path, true)?,
         }
     };
 
