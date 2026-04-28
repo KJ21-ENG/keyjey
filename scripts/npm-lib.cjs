@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
-const { spawn } = require("node:child_process");
+const { execFileSync, spawn } = require("node:child_process");
 const { pipeline } = require("node:stream/promises");
 const { Readable } = require("node:stream");
 
@@ -196,6 +196,131 @@ async function ensureClaudeSettings() {
 
 function stripAnsi(text) {
   return text.replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, "");
+}
+
+function readKeyjeyConfigSection() {
+  let raw = "";
+  try {
+    raw = fs.readFileSync(userConfigPath(), "utf8");
+  } catch (_) {
+    return "";
+  }
+
+  const lines = raw.split(/\r?\n/);
+  let inSection = false;
+  const section = [];
+
+  for (const line of lines) {
+    const header = line.match(/^\s*\[([^\]]+)]\s*$/);
+    if (header) {
+      if (inSection) break;
+      inSection = header[1].trim() === "keyjey";
+      continue;
+    }
+
+    if (inSection) {
+      section.push(line);
+    }
+  }
+
+  return section.length > 0 ? section.join("\n") : raw;
+}
+
+function parseKeyjeyConfigBool(section, key) {
+  const regex = new RegExp(`^\\s*${key}\\s*=\\s*(true|false)\\s*(?:#.*)?$`, "im");
+  const match = section.match(regex);
+  return match ? match[1] === "true" : null;
+}
+
+function parseKeyjeyConfigNumber(section, key) {
+  const regex = new RegExp(`^\\s*${key}\\s*=\\s*(\\d+)\\s*(?:#.*)?$`, "im");
+  const match = section.match(regex);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function ttyColumns() {
+  if (Number.isFinite(process.stdout.columns) && process.stdout.columns > 0) {
+    return process.stdout.columns;
+  }
+
+  const envColumns = Number(process.env.COLUMNS);
+  if (Number.isFinite(envColumns) && envColumns > 0) {
+    return envColumns;
+  }
+
+  try {
+    const output = execFileSync("sh", ["-c", "stty size < /dev/tty"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+    const [, cols] = output.split(/\s+/).map(Number);
+    return Number.isFinite(cols) && cols > 0 ? cols : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function detectFinalWidth() {
+  const section = readKeyjeyConfigSection();
+  if (parseKeyjeyConfigBool(section, "truncate") === false) {
+    return null;
+  }
+
+  return parseKeyjeyConfigNumber(section, "max_width") ?? ttyColumns();
+}
+
+function visibleWidth(text) {
+  return Array.from(stripAnsi(text)).length;
+}
+
+function truncateAnsiLine(line, maxWidth) {
+  if (!Number.isFinite(maxWidth) || maxWidth <= 0 || visibleWidth(line) <= maxWidth) {
+    return maxWidth === 0 ? "" : line;
+  }
+
+  const budget = maxWidth > 1 ? maxWidth - 1 : maxWidth;
+  let width = 0;
+  let out = "";
+  let emittedAnsi = false;
+
+  for (let i = 0; i < line.length;) {
+    if (line.charCodeAt(i) === 0x1b) {
+      const match = line.slice(i).match(/^\u001b\[[0-9;?]*[ -/]*[@-~]/);
+      if (match) {
+        emittedAnsi = true;
+        out += match[0];
+        i += match[0].length;
+        continue;
+      }
+    }
+
+    const ch = Array.from(line.slice(i))[0];
+    const nextWidth = width + 1;
+    if (nextWidth > budget) {
+      break;
+    }
+    out += ch;
+    width = nextWidth;
+    i += ch.length;
+  }
+
+  if (maxWidth > 1) {
+    out += "…";
+  }
+  if (emittedAnsi) {
+    out += "\u001b[0m";
+  }
+  return out;
+}
+
+function truncateOutputToWidth(output, width) {
+  if (!Number.isFinite(width) || width <= 0) return output;
+  return output
+    .split(/\r?\n/)
+    .map((line) => truncateAnsiLine(line, width))
+    .join("\n");
 }
 
 function clamp(value) {
@@ -415,7 +540,7 @@ async function runRemainingWrapper(args) {
   const stdinText = await readStdin();
   const result = await runBinaryCapture(args, stdinText);
   const fallbackCache = findNewestUsageCache(result.stdout);
-  const transformed = applyUsageTransforms(result.stdout, fallbackCache);
+  const transformed = truncateOutputToWidth(applyUsageTransforms(result.stdout, fallbackCache), detectFinalWidth());
 
   if (result.stderr) {
     process.stderr.write(result.stderr);

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3 - 2026-04-28
+
+- Fixed `keyjey-remaining` so its usage-bar post-processing respects terminal-width truncation.
+
 ## 0.1.2 - 2026-04-28
 
 - Added `$keyjey.session_name`, derived from the transcript's first user message.

@@ -1,6 +1,6 @@
 [package]
 name          = "keyjey"
-version       = "0.1.2"
+version       = "0.1.3"
 edition       = "2024"
 description   = "KeyJey - customizable Claude Code statusline renderer"
 license       = "Apache-2.0"
