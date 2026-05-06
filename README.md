@@ -52,7 +52,7 @@ KeyJey preserves existing Codex footer preferences by default. To intentionally 
 keyjey setup --codex-preset rich --codex-force
 ```
 
-Available Codex presets are `rich`, `compact`, `minimal`, and `off`. `--codex-force` creates a timestamped backup before replacing an existing `tui.status_line`.
+Available Codex presets are `rich`, `compact`, `minimal`, and `off`. The `off` preset writes an empty Codex status-line list. `--codex-force` creates a timestamped backup before replacing an existing `tui.status_line`.
 
 For Claude Code, wire `~/.claude/settings.json`:
 

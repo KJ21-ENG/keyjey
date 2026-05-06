@@ -100,7 +100,7 @@ const CODEX_STATUS_LINE_PRESETS = {
     "current-dir",
     "git-branch"
   ],
-  off: null
+  off: []
 };
 
 function normalizeCodexPreset(preset) {
@@ -114,8 +114,8 @@ function normalizeCodexPreset(preset) {
 function codexStatusLineValueToml(preset = "rich") {
   const normalized = normalizeCodexPreset(preset);
   const items = CODEX_STATUS_LINE_PRESETS[normalized];
-  if (items === null) {
-    return "status_line = null\n";
+  if (items.length === 0) {
+    return "status_line = []\n";
   }
 
   const itemLines = items.map((item) => `  "${item}"`).join(",\n");

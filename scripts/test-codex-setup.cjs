@@ -180,7 +180,7 @@ async function testForceReplacesDottedStatusLineWithOffPresetAndBackup() {
     assert.equal(result.changed, true);
     assert.equal(result.preset, "off");
     assert.doesNotMatch(config, /tui\.status_line/);
-    assert.match(config, /\[tui]\nstatus_line = null/);
+    assert.match(config, /\[tui]\nstatus_line = \[]/);
     assert.equal(backupFiles(home).length, 1);
   });
 }

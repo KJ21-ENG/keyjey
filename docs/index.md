@@ -63,7 +63,7 @@ To intentionally replace an existing Codex footer with a KeyJey-managed preset:
 keyjey setup --codex-preset rich --codex-force
 ```
 
-Available Codex presets are `rich`, `compact`, `minimal`, and `off`. KeyJey creates a timestamped backup before replacing an existing Codex `tui.status_line`.
+Available Codex presets are `rich`, `compact`, `minimal`, and `off`. The `off` preset writes an empty Codex status-line list. KeyJey creates a timestamped backup before replacing an existing Codex `tui.status_line`.
 
 ### Cargo Install {#install-cargo}
 
