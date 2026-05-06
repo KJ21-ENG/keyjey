@@ -1,6 +1,6 @@
 {
   "name": "keyjey",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "KeyJey - Claude Code statusline renderer with Codex CLI setup support",
   "license": "Apache-2.0",
   "homepage": "https://github.com/KJ21-ENG/keyjey",
