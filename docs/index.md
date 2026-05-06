@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "⚓ KeyJey"
   text: ""
-  tagline: Bring Starship's power to Claude Code Status Line.
+  tagline: Bring Starship's power to Claude Code Status Line, with native Codex CLI footer setup.
   actions:
     - theme: brand
       text: Get Started
@@ -26,15 +26,20 @@ features:
   - icon: 💰
     title: Session Insights
     details: Track cost, context window usage, API limits, vim mode, agent name, and more — all from Claude Code's live JSON feed.
+  - icon: 🧭
+    title: Codex CLI Setup
+    details: Auto-detect Codex CLI and configure its native footer status line when no Codex status line exists yet.
 ---
 
 ## What is KeyJey?
 
-`keyjey` renders a live statusline for [Claude Code](https://claude.ai/code) sessions.
+`keyjey` renders a live statusline for [Claude Code](https://claude.ai/code) sessions and can configure [Codex CLI](https://developers.openai.com/codex/cli/) to use Codex's native status-line footer.
 
 It reads Claude Code's session JSON from stdin and renders styled text using a simple TOML config file — the same format as [Starship](https://starship.rs).
 
 If you've already invested in Starship customization, KeyJey slots right in: add `[keyjey.*]` sections to your existing `starship.toml` (or use a dedicated `~/.config/keyjey.toml`), reference native KeyJey modules alongside any Starship module, and get a unified statusline that speaks both languages.
+
+Codex CLI does not expose Claude Code's external statusline renderer hook, so KeyJey configures Codex's supported `tui.status_line` setting instead of rendering arbitrary custom text inside Codex.
 
 ## Install {#install-curl}
 
@@ -44,7 +49,13 @@ If you've already invested in Starship customization, KeyJey slots right in: add
 curl -fsSL https://keyjey.dev/install.sh | bash
 ```
 
-Auto-detects your OS and architecture (macOS arm64/x86_64, Linux x86_64/aarch64), downloads the binary to `~/.local/bin/keyjey`, creates a starter config at `~/.config/keyjey.toml`, wires the `statusLine` entry in `~/.claude/settings.json`, and optionally installs [Starship](https://starship.rs) and `libsecret-tools` (Linux only, needed for usage limits).
+Auto-detects your OS and architecture (macOS arm64/x86_64, Linux x86_64/aarch64), downloads the binary to `~/.local/bin/keyjey`, creates a starter config at `~/.config/keyjey.toml`, wires the `statusLine` entry in `~/.claude/settings.json`, configures Codex CLI's native `tui.status_line` when Codex is detected and unconfigured, and optionally installs [Starship](https://starship.rs) and `libsecret-tools` (Linux only, needed for usage limits).
+
+You can rerun setup later with:
+
+```sh
+keyjey setup
+```
 
 ### Cargo Install {#install-cargo}
 

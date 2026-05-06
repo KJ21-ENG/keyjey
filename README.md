@@ -5,16 +5,17 @@
 [![GitHub downloads](https://img.shields.io/github/downloads/KJ21-ENG/keyjey/total?label=github%20downloads&style=flat-square)](https://github.com/KJ21-ENG/keyjey/releases)
 [![License](https://img.shields.io/github/license/KJ21-ENG/keyjey?style=flat-square)](https://github.com/KJ21-ENG/keyjey/blob/main/LICENSE)
 
-**Beautiful, Blazing-fast, Customizable Claude Code Statusline.**
+**Beautiful, Blazing-fast, Customizable Claude Code Statusline with Codex CLI setup support.**
 
 
-`keyjey` renders a live statusline for [Claude Code](https://claude.ai/code) sessions, showing session cost, context window usage, model name, API usage limits, and more — all configurable via a simple TOML file.
+`keyjey` renders a live statusline for [Claude Code](https://claude.ai/code) sessions, showing session cost, context window usage, model name, API usage limits, and more — all configurable via a simple TOML file. It can also configure [Codex CLI](https://developers.openai.com/codex/cli/) to use Codex's native `tui.status_line` footer with a practical model/context/git/limit layout.
 
 ### Key features:
 - 🎨 Fully Customizable: Configure every module with Starship-compatible TOML. Colors, symbols, thresholds — your statusline, your rules.
 - ⚡ Blazing Fast: Written in Rust with a ≤10ms render budget.
 - 🔌 Starship Passthrough: Embed any [Starship](https://starship.rs) module (git_branch, directory, language runtimes) right next to native KeyJey modules.
 - 💰 Session Insights: Track cost, context window usage, API limits, vim mode, agent name, and more — all from Claude Code's live JSON feed. Implement custom warn and critical thresholds with custom colors for each. 
+- 🧭 Codex CLI Setup: Auto-detect Codex CLI during global npm install and configure its native `tui.status_line` when no Codex status line exists yet.
 
 ## 🚀 Install
 
@@ -36,14 +37,36 @@ When installed globally with `npm i -g keyjey`, the package also:
 
 - creates `~/.config/keyjey.toml` if it does not exist
 - wires `~/.claude/settings.json` to use `keyjey-remaining` if no status line is configured yet
+- detects Codex CLI and adds a native `tui.status_line` to `~/.codex/config.toml` if Codex has no status line configured yet
 - installs both `keyjey` and `keyjey-remaining` commands
 
-Then wire `~/.claude/settings.json`:
+You can rerun setup later without reinstalling:
+
+```sh
+keyjey setup
+```
+
+For Claude Code, wire `~/.claude/settings.json`:
 
 ```json
 {
   "statusLine": { "type": "command", "command": "keyjey" }
 }
+```
+
+For Codex CLI, KeyJey uses Codex's supported native footer configuration instead of rendering custom text inside Codex:
+
+```toml
+[tui]
+status_line = [
+  "model-with-reasoning",
+  "fast-mode",
+  "current-dir",
+  "git-branch",
+  "context-remaining",
+  "five-hour-limit",
+  "weekly-limit",
+]
 ```
 
 ### 📦 Method 2: Build from source

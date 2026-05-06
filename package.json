@@ -1,7 +1,7 @@
 {
   "name": "keyjey",
-  "version": "0.1.3",
-  "description": "KeyJey - customizable Claude Code statusline renderer",
+  "version": "0.1.4",
+  "description": "KeyJey - Claude Code statusline renderer with Codex CLI setup support",
   "license": "Apache-2.0",
   "homepage": "https://github.com/KJ21-ENG/keyjey",
   "repository": {
@@ -35,7 +35,8 @@
   },
   "scripts": {
     "postinstall": "node ./scripts/postinstall.cjs",
-    "test:npm": "KEYJEY_BINARY_PATH=$(command -v keyjey) node ./bin/keyjey.js --help",
+    "test:codex-setup": "node ./scripts/test-codex-setup.cjs",
+    "test:npm": "cargo build --quiet && KEYJEY_BINARY_PATH=\"$PWD/target/debug/keyjey\" node ./bin/keyjey.js --help",
     "test:npm:install": "tmp=$(mktemp -d) && HOME=\"$tmp\" npm_config_global=true KEYJEY_BINARY_PATH=$(command -v keyjey) node ./scripts/postinstall.cjs && test -f \"$tmp/.config/keyjey.toml\" && test -f \"$tmp/.claude/settings.json\" && rm -rf \"$tmp\""
   },
   "publishConfig": {

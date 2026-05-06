@@ -1,9 +1,8 @@
 const {
   ensureBinary,
-  ensureClaudeSettings,
-  ensureUserConfig,
   resolveTarget,
-  releaseTag
+  releaseTag,
+  setupSupportedClis
 } = require("./npm-lib.cjs");
 
 ensureBinary()
@@ -11,17 +10,22 @@ ensureBinary()
     console.log(`KeyJey ${releaseTag()} installed for ${resolveTarget()} at ${binaryPath}`);
 
     if (process.env.npm_config_global === "true") {
-      const config = await ensureUserConfig();
-      const settings = await ensureClaudeSettings();
+      const { config, claude, codex } = await setupSupportedClis();
 
       if (config.created) {
         console.log(`Created default config at ${config.path}`);
       }
-      if (settings.changed) {
-        console.log(`Configured Claude Code statusLine in ${settings.path}`);
+      if (claude.changed) {
+        console.log(`Configured Claude Code statusLine in ${claude.path}`);
       }
-      if (!config.created && !settings.changed) {
-        console.log("Claude Code config already exists; no user files changed.");
+      if (codex.changed) {
+        console.log(`Configured Codex CLI tui.status_line in ${codex.path}`);
+        if (codex.backupPath) {
+          console.log(`Backed up existing Codex config to ${codex.backupPath}`);
+        }
+      }
+      if (!config.created && !claude.changed && !codex.changed) {
+        console.log("Claude Code and Codex CLI config already exist or Codex was not detected; no user files changed.");
       }
     }
   })

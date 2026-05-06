@@ -74,6 +74,40 @@ function claudeSettingsPath() {
   return path.join(homeDir(), ".claude", "settings.json");
 }
 
+function codexConfigPath() {
+  return path.join(homeDir(), ".codex", "config.toml");
+}
+
+const CODEX_STATUS_LINE_ITEMS = [
+  "model-with-reasoning",
+  "fast-mode",
+  "current-dir",
+  "git-branch",
+  "context-remaining",
+  "five-hour-limit",
+  "weekly-limit"
+];
+
+function codexStatusLineToml() {
+  const items = CODEX_STATUS_LINE_ITEMS.map((item) => `  "${item}"`).join(",\n");
+  return `[tui]\nstatus_line = [\n${items},\n]\n`;
+}
+
+function commandExists(command) {
+  const pathValue = process.env.PATH || "";
+  for (const dir of pathValue.split(path.delimiter)) {
+    if (!dir) continue;
+    const candidate = path.join(dir, command);
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return true;
+    } catch (_) {
+      // Keep scanning PATH.
+    }
+  }
+  return false;
+}
+
 async function downloadBinary(destination) {
   const response = await fetch(binaryUrl(), { redirect: "follow" });
   if (!response.ok || !response.body) {
@@ -192,6 +226,113 @@ async function ensureClaudeSettings() {
   }
 
   return { changed, path: destination };
+}
+
+function hasCodexStatusLine(raw) {
+  const lines = raw.split(/\r?\n/);
+  let inTui = false;
+
+  for (const line of lines) {
+    if (/^\s*tui\.status_line\s*=/.test(line)) {
+      return true;
+    }
+
+    const header = line.match(/^\s*\[([^\]]+)]\s*(?:#.*)?$/);
+    if (header) {
+      inTui = header[1].trim() === "tui";
+      continue;
+    }
+
+    if (inTui && /^\s*status_line\s*=/.test(line)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function hasTuiSection(raw) {
+  return raw.split(/\r?\n/).some((line) => /^\s*\[tui]\s*(?:#.*)?$/.test(line));
+}
+
+function insertCodexStatusLine(raw) {
+  const statusLine = `status_line = [\n${CODEX_STATUS_LINE_ITEMS.map((item) => `  "${item}"`).join(",\n")},\n]\n`;
+  if (!raw.trim()) {
+    return codexStatusLineToml();
+  }
+  if (!hasTuiSection(raw)) {
+    const suffix = raw.endsWith("\n") || raw.length === 0 ? "" : "\n";
+    return `${raw}${suffix}\n${codexStatusLineToml()}`;
+  }
+
+  const lines = raw.split(/\r?\n/);
+  let tuiHeaderIndex = -1;
+  let insertAt = lines.length;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const header = lines[i].match(/^\s*\[([^\]]+)]\s*(?:#.*)?$/);
+    if (!header) continue;
+    if (header[1].trim() === "tui") {
+      tuiHeaderIndex = i;
+      continue;
+    }
+    if (tuiHeaderIndex !== -1 && i > tuiHeaderIndex) {
+      insertAt = i;
+      break;
+    }
+  }
+
+  if (tuiHeaderIndex === -1) {
+    const suffix = raw.endsWith("\n") || raw.length === 0 ? "" : "\n";
+    return `${raw}${suffix}\n${codexStatusLineToml()}`;
+  }
+
+  const before = lines.slice(0, insertAt);
+  const after = lines.slice(insertAt);
+  const insertion = statusLine.trimEnd().split("\n");
+  const updated = [...before, ...insertion, "", ...after].join("\n");
+  return raw.endsWith("\n") ? `${updated.replace(/\n+$/, "")}\n` : updated.replace(/\n+$/, "");
+}
+
+function backupSuffix() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+async function ensureCodexConfig() {
+  const destination = codexConfigPath();
+  const exists = fs.existsSync(destination);
+  if (!exists && !commandExists("codex")) {
+    return { changed: false, path: destination, detected: false, reason: "codex not detected" };
+  }
+
+  let raw = "";
+  if (exists) {
+    raw = await fsp.readFile(destination, "utf8");
+    if (hasCodexStatusLine(raw)) {
+      return { changed: false, path: destination, detected: true, reason: "status_line exists" };
+    }
+  }
+
+  await fsp.mkdir(path.dirname(destination), { recursive: true });
+
+  let backupPath = null;
+  if (exists) {
+    backupPath = `${destination}.backup.keyjey-${backupSuffix()}`;
+    await fsp.copyFile(destination, backupPath);
+  }
+
+  const updated = exists ? insertCodexStatusLine(raw) : codexStatusLineToml();
+  await fsp.writeFile(destination, updated.endsWith("\n") ? updated : `${updated}\n`, "utf8");
+  return { changed: true, path: destination, detected: true, backupPath };
+}
+
+async function setupSupportedClis() {
+  const config = await ensureUserConfig();
+  const claude = await ensureClaudeSettings();
+  const codex = await ensureCodexConfig();
+  return { config, claude, codex };
 }
 
 function stripAnsi(text) {
@@ -558,6 +699,7 @@ async function runRemainingWrapper(args) {
 
 module.exports = {
   ensureBinary,
+  ensureCodexConfig,
   ensureClaudeSettings,
   ensureUserConfig,
   homeDir,
@@ -567,5 +709,6 @@ module.exports = {
   resolveTarget,
   runBinary,
   runBinaryCapture,
-  runRemainingWrapper
+  runRemainingWrapper,
+  setupSupportedClis
 };
