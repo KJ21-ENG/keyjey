@@ -46,6 +46,14 @@ You can rerun setup later without reinstalling:
 keyjey setup
 ```
 
+KeyJey preserves existing Codex footer preferences by default. To intentionally apply a KeyJey-managed Codex preset, use:
+
+```sh
+keyjey setup --codex-preset rich --codex-force
+```
+
+Available Codex presets are `rich`, `compact`, `minimal`, and `off`. `--codex-force` creates a timestamped backup before replacing an existing `tui.status_line`.
+
 For Claude Code, wire `~/.claude/settings.json`:
 
 ```json

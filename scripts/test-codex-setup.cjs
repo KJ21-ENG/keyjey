@@ -116,12 +116,85 @@ async function testSectionStatusLinePreserved() {
   });
 }
 
+async function testExplicitPresetCreatesConfigWithoutCodexOnPath() {
+  await withTempHome(async (home) => {
+    const result = await ensureCodexConfig({ preset: "minimal" });
+    const config = await fsp.readFile(codexConfigPath(home), "utf8");
+
+    assert.equal(result.detected, true);
+    assert.equal(result.changed, true);
+    assert.equal(result.preset, "minimal");
+    assert.match(config, /"model-with-reasoning"/);
+    assert.match(config, /"current-dir"/);
+    assert.match(config, /"git-branch"/);
+    assert.doesNotMatch(config, /"weekly-limit"/);
+  });
+}
+
+async function testPresetWithoutForcePreservesExistingStatusLine() {
+  await withTempHome(async (home) => {
+    const configPath = codexConfigPath(home);
+    const original = '[tui]\nstatus_line = ["current-dir"]\nanimations = true\n';
+    await fsp.mkdir(path.dirname(configPath), { recursive: true });
+    await fsp.writeFile(configPath, original, "utf8");
+
+    const result = await ensureCodexConfig({ preset: "compact" });
+    const config = await fsp.readFile(configPath, "utf8");
+
+    assert.equal(result.changed, false);
+    assert.equal(result.reason, "status_line exists");
+    assert.equal(config, original);
+    assert.equal(backupFiles(home).length, 0);
+  });
+}
+
+async function testForceReplacesSectionStatusLineWithPresetAndBackup() {
+  await withTempHome(async (home) => {
+    const configPath = codexConfigPath(home);
+    await fsp.mkdir(path.dirname(configPath), { recursive: true });
+    await fsp.writeFile(configPath, '[tui]\nstatus_line = ["current-dir"]\nanimations = true\n\n[tools]\nweb_search = true\n', "utf8");
+
+    const result = await ensureCodexConfig({ preset: "compact", force: true });
+    const config = await fsp.readFile(configPath, "utf8");
+
+    assert.equal(result.changed, true);
+    assert.equal(result.forced, true);
+    assert.equal(result.preset, "compact");
+    assert.match(config, /\[tui]\nanimations = true\n\s*status_line = \[/);
+    assert.match(config, /"context-remaining"/);
+    assert.doesNotMatch(config, /"weekly-limit"/);
+    assert.match(config, /\[tools]/);
+    assert.equal(backupFiles(home).length, 1);
+  });
+}
+
+async function testForceReplacesDottedStatusLineWithOffPresetAndBackup() {
+  await withTempHome(async (home) => {
+    const configPath = codexConfigPath(home);
+    await fsp.mkdir(path.dirname(configPath), { recursive: true });
+    await fsp.writeFile(configPath, 'model = "gpt-5.4"\ntui.status_line = ["model-with-reasoning"]\n', "utf8");
+
+    const result = await ensureCodexConfig({ preset: "off", force: true });
+    const config = await fsp.readFile(configPath, "utf8");
+
+    assert.equal(result.changed, true);
+    assert.equal(result.preset, "off");
+    assert.doesNotMatch(config, /tui\.status_line/);
+    assert.match(config, /\[tui]\nstatus_line = null/);
+    assert.equal(backupFiles(home).length, 1);
+  });
+}
+
 async function main() {
   await testNoCodexNoConfig();
   await testCodexDetectedCreatesConfig();
   await testExistingTuiGetsStatusLineAndBackup();
   await testDottedStatusLinePreserved();
   await testSectionStatusLinePreserved();
+  await testExplicitPresetCreatesConfigWithoutCodexOnPath();
+  await testPresetWithoutForcePreservesExistingStatusLine();
+  await testForceReplacesSectionStatusLineWithPresetAndBackup();
+  await testForceReplacesDottedStatusLineWithOffPresetAndBackup();
   console.log("Codex setup tests passed");
 }
 

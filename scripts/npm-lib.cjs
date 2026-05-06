@@ -78,19 +78,52 @@ function codexConfigPath() {
   return path.join(homeDir(), ".codex", "config.toml");
 }
 
-const CODEX_STATUS_LINE_ITEMS = [
-  "model-with-reasoning",
-  "fast-mode",
-  "current-dir",
-  "git-branch",
-  "context-remaining",
-  "five-hour-limit",
-  "weekly-limit"
-];
+const CODEX_STATUS_LINE_PRESETS = {
+  rich: [
+    "model-with-reasoning",
+    "fast-mode",
+    "current-dir",
+    "git-branch",
+    "context-remaining",
+    "five-hour-limit",
+    "weekly-limit"
+  ],
+  compact: [
+    "model-with-reasoning",
+    "fast-mode",
+    "current-dir",
+    "git-branch",
+    "context-remaining"
+  ],
+  minimal: [
+    "model-with-reasoning",
+    "current-dir",
+    "git-branch"
+  ],
+  off: null
+};
 
-function codexStatusLineToml() {
-  const items = CODEX_STATUS_LINE_ITEMS.map((item) => `  "${item}"`).join(",\n");
-  return `[tui]\nstatus_line = [\n${items},\n]\n`;
+function normalizeCodexPreset(preset) {
+  const normalized = (preset || "rich").toLowerCase();
+  if (!Object.prototype.hasOwnProperty.call(CODEX_STATUS_LINE_PRESETS, normalized)) {
+    throw new Error(`Unknown Codex status-line preset "${preset}". Use one of: ${Object.keys(CODEX_STATUS_LINE_PRESETS).join(", ")}.`);
+  }
+  return normalized;
+}
+
+function codexStatusLineValueToml(preset = "rich") {
+  const normalized = normalizeCodexPreset(preset);
+  const items = CODEX_STATUS_LINE_PRESETS[normalized];
+  if (items === null) {
+    return "status_line = null\n";
+  }
+
+  const itemLines = items.map((item) => `  "${item}"`).join(",\n");
+  return `status_line = [\n${itemLines},\n]\n`;
+}
+
+function codexStatusLineToml(preset = "rich") {
+  return `[tui]\n${codexStatusLineValueToml(preset)}`;
 }
 
 function commandExists(command) {
@@ -255,14 +288,52 @@ function hasTuiSection(raw) {
   return raw.split(/\r?\n/).some((line) => /^\s*\[tui]\s*(?:#.*)?$/.test(line));
 }
 
-function insertCodexStatusLine(raw) {
-  const statusLine = `status_line = [\n${CODEX_STATUS_LINE_ITEMS.map((item) => `  "${item}"`).join(",\n")},\n]\n`;
+function shouldSkipTomlValueLines(line) {
+  const equalsIndex = line.indexOf("=");
+  if (equalsIndex === -1) return false;
+  const value = line.slice(equalsIndex + 1);
+  return value.includes("[") && !value.includes("]");
+}
+
+function removeCodexStatusLine(raw) {
+  const lines = raw.split(/\r?\n/);
+  const kept = [];
+  let inTui = false;
+  let skipUntilArrayEnd = false;
+
+  for (const line of lines) {
+    if (skipUntilArrayEnd) {
+      if (line.includes("]")) {
+        skipUntilArrayEnd = false;
+      }
+      continue;
+    }
+
+    const dottedStatusLine = /^\s*tui\.status_line\s*=/.test(line);
+    const sectionStatusLine = inTui && /^\s*status_line\s*=/.test(line);
+    if (dottedStatusLine || sectionStatusLine) {
+      skipUntilArrayEnd = shouldSkipTomlValueLines(line);
+      continue;
+    }
+
+    const header = line.match(/^\s*\[([^\]]+)]\s*(?:#.*)?$/);
+    if (header) {
+      inTui = header[1].trim() === "tui";
+    }
+    kept.push(line);
+  }
+
+  return kept.join("\n");
+}
+
+function insertCodexStatusLine(raw, preset = "rich") {
+  const statusLine = codexStatusLineValueToml(preset);
   if (!raw.trim()) {
-    return codexStatusLineToml();
+    return codexStatusLineToml(preset);
   }
   if (!hasTuiSection(raw)) {
     const suffix = raw.endsWith("\n") || raw.length === 0 ? "" : "\n";
-    return `${raw}${suffix}\n${codexStatusLineToml()}`;
+    return `${raw}${suffix}\n${codexStatusLineToml(preset)}`;
   }
 
   const lines = raw.split(/\r?\n/);
@@ -284,7 +355,7 @@ function insertCodexStatusLine(raw) {
 
   if (tuiHeaderIndex === -1) {
     const suffix = raw.endsWith("\n") || raw.length === 0 ? "" : "\n";
-    return `${raw}${suffix}\n${codexStatusLineToml()}`;
+    return `${raw}${suffix}\n${codexStatusLineToml(preset)}`;
   }
 
   const before = lines.slice(0, insertAt);
@@ -300,18 +371,28 @@ function backupSuffix() {
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
-async function ensureCodexConfig() {
+async function ensureCodexConfig(options = {}) {
+  const preset = normalizeCodexPreset(options.preset);
+  const force = Boolean(options.force);
+  const explicitlyRequested = Boolean(options.preset || force);
   const destination = codexConfigPath();
   const exists = fs.existsSync(destination);
-  if (!exists && !commandExists("codex")) {
+  if (!exists && !commandExists("codex") && !explicitlyRequested) {
     return { changed: false, path: destination, detected: false, reason: "codex not detected" };
   }
 
   let raw = "";
   if (exists) {
     raw = await fsp.readFile(destination, "utf8");
-    if (hasCodexStatusLine(raw)) {
-      return { changed: false, path: destination, detected: true, reason: "status_line exists" };
+    if (hasCodexStatusLine(raw) && !force) {
+      return {
+        changed: false,
+        path: destination,
+        detected: true,
+        preset,
+        forced: false,
+        reason: "status_line exists"
+      };
     }
   }
 
@@ -323,15 +404,16 @@ async function ensureCodexConfig() {
     await fsp.copyFile(destination, backupPath);
   }
 
-  const updated = exists ? insertCodexStatusLine(raw) : codexStatusLineToml();
+  const base = force && exists ? removeCodexStatusLine(raw) : raw;
+  const updated = exists ? insertCodexStatusLine(base, preset) : codexStatusLineToml(preset);
   await fsp.writeFile(destination, updated.endsWith("\n") ? updated : `${updated}\n`, "utf8");
-  return { changed: true, path: destination, detected: true, backupPath };
+  return { changed: true, path: destination, detected: true, backupPath, preset, forced: force };
 }
 
-async function setupSupportedClis() {
+async function setupSupportedClis(options = {}) {
   const config = await ensureUserConfig();
   const claude = await ensureClaudeSettings();
-  const codex = await ensureCodexConfig();
+  const codex = await ensureCodexConfig(options.codex);
   return { config, claude, codex };
 }
 

@@ -57,6 +57,14 @@ You can rerun setup later with:
 keyjey setup
 ```
 
+To intentionally replace an existing Codex footer with a KeyJey-managed preset:
+
+```sh
+keyjey setup --codex-preset rich --codex-force
+```
+
+Available Codex presets are `rich`, `compact`, `minimal`, and `off`. KeyJey creates a timestamped backup before replacing an existing Codex `tui.status_line`.
+
 ### Cargo Install {#install-cargo}
 
 Requires the Rust toolchain.
